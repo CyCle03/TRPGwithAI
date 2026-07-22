@@ -47,6 +47,8 @@ io.on('connection', (socket) => {
     character: session.character,
     log: session.log,
   });
+  // 저장된 레벨업 선택이 대기 중이면 다시 띄운다
+  if (session.pendingLevelUp) socket.emit('levelUp', session.pendingLevelUp);
 
   socket.on('createCharacter', async (payload) => {
     if (session.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });
@@ -74,6 +76,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('levelUpChoice', (payload) => {
+    try {
+      session.levelUpChoice(emit, payload || {});
+    } catch (e) {
+      console.error(e);
+      emit('error', { message: '레벨업 처리 실패: ' + e.message });
+    }
+  });
+
   // 새 게임(저장본 삭제 후 초기화)
   socket.on('resetGame', () => {
     store.clear();
@@ -81,6 +92,7 @@ io.on('connection', (socket) => {
     session.messages = [];
     session.log = [];
     session.summary = '';
+    session.pendingLevelUp = null;
     emit('reset', {});
   });
 });

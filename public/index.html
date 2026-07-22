@@ -45,6 +45,15 @@
 
       <aside class="status-pane">
         <h2 id="charTitle">캐릭터</h2>
+
+        <div class="level-row">
+          <span class="level-badge">Lv <span id="levelText">1</span></span>
+          <div class="xp-wrap">
+            <div class="xp-label">XP <span id="xpText">0/8</span></div>
+            <div class="xp-bar-outer"><div id="xpBar" class="xp-bar-inner"></div></div>
+          </div>
+        </div>
+
         <div class="hp-block">
           <div class="hp-label">
             HP <span id="hpText">–/–</span>
@@ -61,8 +70,27 @@
         <h3>인벤토리</h3>
         <ul id="inventory" class="inventory"></ul>
 
+        <h3>습득 무브</h3>
+        <ul id="moves" class="moves"></ul>
+
         <div class="model-note" id="modelNote"></div>
       </aside>
+    </div>
+
+    <!-- 레벨업 선택 모달 -->
+    <div id="levelupModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h2>⭐ 레벨업!</h2>
+        <p class="modal-sub">성장 방향을 선택하세요.</p>
+
+        <h3>능력치 +1</h3>
+        <div id="luStats" class="lu-stats"></div>
+
+        <h3>새 무브 습득</h3>
+        <div id="luMoves" class="lu-moves"></div>
+
+        <button id="luConfirm" class="primary" disabled>선택 확정</button>
+      </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

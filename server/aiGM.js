@@ -59,11 +59,15 @@ ${MOVES_SUMMARY}
 function buildStateSummary(session) {
   const c = session.character;
   const statLine = ABILITIES.map((k) => `${k} ${fmtMod(c.stats[k])}`).join(' ');
+  const moveLine = (c.moves || []).length
+    ? c.moves.map((m) => `${m.name}(${m.desc})`).join(' / ')
+    : '(없음)';
   return `[현재 캐릭터 상태 — 시스템이 관리하는 실제 수치]
-이름: ${c.name} / 클래스: ${c.className}
+이름: ${c.name} / 클래스: ${c.className} / 레벨: ${c.level || 1}
 HP: ${c.hp}/${c.maxHp}  방어구: ${c.armor}
 능력치: ${statLine}
 인벤토리: ${c.inventory.length ? c.inventory.join(', ') : '(비어 있음)'}
+습득 무브: ${moveLine}
 
 [진행 맥락]
 ${session.summary || '(모험 시작 직후)'}`;

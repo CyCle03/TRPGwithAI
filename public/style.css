@@ -260,6 +260,43 @@ button.ghost:hover {
   letter-spacing: 0.05em;
   color: var(--muted);
 }
+.level-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.level-badge {
+  background: var(--accent);
+  color: #211a0e;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.xp-wrap {
+  flex: 1;
+}
+.xp-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.xp-bar-outer {
+  height: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.xp-bar-inner {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6a8fc9, #c9962e);
+  transition: width 0.4s ease;
+}
+
 .hp-block {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -329,6 +366,137 @@ button.ghost:hover {
   color: var(--muted);
   font-style: italic;
   border-style: dashed;
+}
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.moves li {
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  border-radius: 6px;
+  padding: 7px 11px;
+  font-size: 0.85rem;
+}
+.moves li .mname {
+  font-weight: 700;
+  color: var(--accent);
+}
+.moves li .mdesc {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+.moves li.empty {
+  color: var(--muted);
+  font-style: italic;
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+/* 레벨업 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--accent-2);
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.6);
+}
+.modal-card h2 {
+  margin: 0 0 4px;
+}
+.modal-sub {
+  color: var(--muted);
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+}
+.modal-card h3 {
+  margin: 18px 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.lu-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.lu-stat {
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+.lu-stat:hover:not(.disabled) {
+  border-color: var(--accent-2);
+}
+.lu-stat.selected {
+  border-color: var(--accent);
+}
+.lu-stat.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.lu-stat .k {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.lu-stat .v {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+.lu-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lu-move {
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.lu-move:hover {
+  border-color: var(--accent-2);
+}
+.lu-move.selected {
+  border-color: var(--accent);
+}
+.lu-move .mname {
+  font-weight: 700;
+}
+.lu-move .mdesc {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 3px;
+}
+.lu-move.none {
+  font-style: italic;
+  color: var(--muted);
 }
 .flash {
   animation: flash 0.9s ease;
