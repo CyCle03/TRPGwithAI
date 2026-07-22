@@ -98,6 +98,36 @@ async function callGM(session, messages) {
   return normalize(parsed);
 }
 
+// 행동 제안용 지시 프롬프트 (GM 스키마와 별개, 이야기 진행 없음).
+const SUGGEST_SYSTEM = `너는 던전 월드 GM의 보조다. 현재 장면과 캐릭터 상태를 바탕으로, 플레이어가 지금 취할 만한 서로 다른 행동 3가지를 제안하라.
+- 각 제안은 한국어로 12자~30자 내외의 구체적인 행동 서술("~한다" 형태).
+- 캐릭터의 클래스·능력치·습득 무브를 활용하는 선택지를 섞어라.
+- 안전한 선택과 과감한 선택을 다양하게. 스토리를 대신 진행하지 말고, 선택지만 제시하라.
+JSON 문자열 배열로만 출력하라.`;
+
+/**
+ * 현재 상황에서 취할 만한 행동 제안 목록을 받아온다.
+ * @returns {Promise<string[]>}
+ */
+async function suggestGmActions(session, messages) {
+  const jsonText = await provider.generateSuggestions({
+    staticSystem: SUGGEST_SYSTEM,
+    dynamicSystem: buildStateSummary(session),
+    messages,
+  });
+  let arr;
+  try {
+    arr = JSON.parse(jsonText);
+  } catch (e) {
+    throw new Error('행동 제안 JSON 파싱 실패: ' + e.message);
+  }
+  if (!Array.isArray(arr)) arr = [];
+  return arr
+    .map((s) => String(s || '').trim())
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 /** 스키마 밖의 값이 들어와도 안전하게 정규화. */
 function normalize(parsed) {
   const a = parsed.action || {};
@@ -116,4 +146,4 @@ function normalize(parsed) {
   };
 }
 
-module.exports = { callGM, MODEL, PROVIDER: provider.name };
+module.exports = { callGM, suggestGmActions, MODEL, PROVIDER: provider.name };

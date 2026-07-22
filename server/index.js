@@ -8,7 +8,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 
 const { GameSession } = require('./gameSession');
-const { listClasses } = require('./dungeonWorld');
+const { listClasses, STANDARD_ARRAY, STAT_KEYS } = require('./dungeonWorld');
 const { MODEL, PROVIDER } = require('./aiGM');
 const store = require('./store');
 
@@ -43,6 +43,8 @@ io.on('connection', (socket) => {
   socket.emit('init', {
     model: MODEL,
     classes: listClasses(),
+    statKeys: STAT_KEYS,
+    standardArray: STANDARD_ARRAY,
     hasCharacter: session.hasCharacter(),
     character: session.character,
     log: session.log,
@@ -71,6 +73,19 @@ io.on('connection', (socket) => {
     } catch (e) {
       console.error(e);
       emit('error', { message: '행동 처리 실패: ' + e.message });
+    } finally {
+      session.busy = false;
+    }
+  });
+
+  socket.on('suggestActions', async () => {
+    if (session.busy) return;
+    session.busy = true;
+    try {
+      await session.suggestActions(emit);
+    } catch (e) {
+      console.error(e);
+      emit('error', { message: '행동 제안 실패: ' + e.message });
     } finally {
       session.busy = false;
     }

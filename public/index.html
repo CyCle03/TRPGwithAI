@@ -7,19 +7,55 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- 캐릭터 생성 화면 -->
+    <!-- 캐릭터 생성 화면 (시트 만들기 3단계) -->
     <div id="setup" class="setup hidden">
       <div class="setup-card">
         <h1>🎲 AI GM 솔로 던전 월드</h1>
-        <p class="subtitle">AI가 GM을 맡는 1인용 판타지 모험 (MVP)</p>
+        <p class="subtitle">캐릭터 시트를 만들어 모험을 시작하세요</p>
 
-        <label>캐릭터 이름</label>
-        <input id="charName" type="text" placeholder="예: 아린" maxlength="40" />
+        <div class="steps">
+          <span class="step active" data-step="1">1 · 클래스</span>
+          <span class="step" data-step="2">2 · 능력치</span>
+          <span class="step" data-step="3">3 · 소개</span>
+        </div>
 
-        <label>클래스 선택</label>
-        <div id="classList" class="class-list"></div>
+        <!-- Step 1: 클래스 -->
+        <div class="step-panel" data-panel="1">
+          <label>클래스 선택</label>
+          <div id="classList" class="class-list"></div>
+        </div>
 
-        <button id="startBtn" class="primary">모험 시작</button>
+        <!-- Step 2: 능력치 -->
+        <div class="step-panel hidden" data-panel="2">
+          <label>능력치 배분</label>
+          <div class="stat-mode">
+            <button type="button" id="modeRecommend" class="toggle active">추천 배치</button>
+            <button type="button" id="modeCustom" class="toggle">직접 배분</button>
+          </div>
+          <p class="hint" id="statHint"></p>
+          <div id="statAssign" class="stat-assign"></div>
+        </div>
+
+        <!-- Step 3: 소개 -->
+        <div class="step-panel hidden" data-panel="3">
+          <label>캐릭터 이름</label>
+          <input id="charName" type="text" placeholder="예: 아린" maxlength="40" />
+          <label>한 줄 소개 <span class="opt">(선택)</span></label>
+          <input
+            id="charLook"
+            type="text"
+            placeholder="예: 상처투성이 갑옷을 걸친 과묵한 용병"
+            maxlength="200"
+          />
+          <p class="hint">외형·성격·배경을 적으면 GM이 첫 장면에 반영합니다.</p>
+          <div id="sheetSummary" class="sheet-summary"></div>
+        </div>
+
+        <div class="wizard-nav">
+          <button type="button" id="prevBtn" class="ghost hidden">이전</button>
+          <button type="button" id="nextBtn" class="primary">다음</button>
+          <button type="button" id="startBtn" class="primary hidden">모험 시작</button>
+        </div>
       </div>
     </div>
 
@@ -32,7 +68,11 @@
         </header>
         <div id="log" class="log"></div>
         <div id="thinking" class="thinking hidden">GM이 이야기를 짜는 중…</div>
+        <div id="suggestions" class="suggestions hidden"></div>
         <form id="inputForm" class="input-bar">
+          <button type="button" class="ghost suggest-btn" id="suggestBtn" title="행동 제안 받기">
+            💡 제안
+          </button>
           <input
             id="actionInput"
             type="text"

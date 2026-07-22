@@ -1,6 +1,6 @@
 'use strict';
 
-const { callGM } = require('./aiGM');
+const { callGM, suggestGmActions } = require('./aiGM');
 const rules = require('./rulesEngine');
 const {
   createCharacter,
@@ -64,8 +64,8 @@ class GameSession {
   }
 
   /** 캐릭터 생성 + AI GM 오프닝 장면. */
-  async createCharacter(emit, { name, classId }) {
-    this.character = createCharacter(name, classId);
+  async createCharacter(emit, { name, classId, stats, look }) {
+    this.character = createCharacter(name, classId, { stats, look });
     this.messages = [];
     this.log = [];
     this.summary = '';
@@ -78,9 +78,10 @@ class GameSession {
       `${this.character.name} (${this.character.className}) 의 모험이 시작됩니다.`
     );
 
+    const lookLine = this.character.look ? ` 캐릭터 소개: "${this.character.look}".` : '';
     const kickoff = {
       role: 'user',
-      content: `새로운 모험을 시작한다. 플레이어 캐릭터는 ${this.character.name}(${this.character.className})다. 흥미로운 첫 장면을 묘사하고, 플레이어가 바로 행동할 수 있는 상황을 제시하라. 첫 장면에는 판정이 필요 없다.`,
+      content: `새로운 모험을 시작한다. 플레이어 캐릭터는 ${this.character.name}(${this.character.className})다.${lookLine} 이 캐릭터의 소개를 반영해 흥미로운 첫 장면을 묘사하고, 플레이어가 바로 행동할 수 있는 상황을 제시하라. 첫 장면에는 판정이 필요 없다.`,
     };
     this.messages.push(kickoff);
 
@@ -108,6 +109,28 @@ class GameSession {
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: true });
     this._checkLevelUp(emit);
     store.save(this.toJSON());
+  }
+
+  /** 현재 상황에서 취할 만한 행동 몇 가지를 AI에게 받아 제안한다(이야기 진행 안 함). */
+  async suggestActions(emit) {
+    if (!this.character) {
+      emit('error', { message: '먼저 캐릭터를 생성하세요.' });
+      return;
+    }
+    if (this.pendingLevelUp) {
+      emit('levelUp', this.pendingLevelUp);
+      return;
+    }
+    emit('gmThinking', { on: true });
+    try {
+      const suggestions = await suggestGmActions(this, this._recentMessages());
+      emit('suggestions', { items: suggestions });
+    } catch (e) {
+      console.error('행동 제안 실패:', e);
+      emit('error', { message: '행동 제안 실패: ' + e.message });
+    } finally {
+      emit('gmThinking', { on: false });
+    }
   }
 
   /** XP가 임계값 이상이면 레벨업 선택지를 띄운다(선택 완료 전까지 행동 차단). */

@@ -8,7 +8,7 @@ const { GoogleGenAI, Type } = require('@google/genai');
  * Gemini 스키마는 nullable/propertyOrdering 등 자체 형식을 쓴다(Anthropic과 다름).
  */
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
 
 let client = null;
 function getClient() {
@@ -82,4 +82,22 @@ async function generate({ staticSystem, dynamicSystem, messages }) {
   return text;
 }
 
-module.exports = { generate, MODEL, name: 'gemini' };
+// 행동 제안: 문자열 배열을 최상위 스키마로 반환
+const SUGGEST_SCHEMA = { type: Type.ARRAY, items: { type: Type.STRING } };
+
+async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient().models.generateContent({
+    model: MODEL,
+    contents: toGeminiContents(messages),
+    config: {
+      systemInstruction: `${staticSystem}\n\n${dynamicSystem}`,
+      responseMimeType: 'application/json',
+      responseSchema: SUGGEST_SCHEMA,
+    },
+  });
+  const text = resp.text;
+  if (!text) throw new Error('Gemini 제안 응답이 비어 있습니다.');
+  return text;
+}
+
+module.exports = { generate, generateSuggestions, MODEL, name: 'gemini' };

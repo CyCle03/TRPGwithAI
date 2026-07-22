@@ -63,4 +63,33 @@ async function generate({ staticSystem, dynamicSystem, messages }) {
   return textBlock.text;
 }
 
-module.exports = { generate, MODEL, name: 'anthropic' };
+// 행동 제안: 문자열 배열 스키마
+const SUGGEST_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['suggestions'],
+  properties: {
+    suggestions: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    thinking: { type: 'disabled' },
+    system: [
+      { type: 'text', text: staticSystem },
+      { type: 'text', text: dynamicSystem },
+    ],
+    messages,
+    output_config: { format: { type: 'json_schema', schema: SUGGEST_SCHEMA } },
+  });
+  const textBlock = resp.content.find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('Claude 제안 응답에 텍스트 블록이 없습니다.');
+  // aiGM은 배열을 기대하므로 suggestions 배열만 꺼내 문자열화
+  const obj = JSON.parse(textBlock.text);
+  return JSON.stringify(obj.suggestions || []);
+}
+
+module.exports = { generate, generateSuggestions, MODEL, name: 'anthropic' };

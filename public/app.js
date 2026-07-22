@@ -8,13 +8,23 @@ const setupEl = document.getElementById('setup');
 const gameEl = document.getElementById('game');
 const classListEl = document.getElementById('classList');
 const charNameEl = document.getElementById('charName');
+const charLookEl = document.getElementById('charLook');
 const startBtn = document.getElementById('startBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const modeRecommend = document.getElementById('modeRecommend');
+const modeCustom = document.getElementById('modeCustom');
+const statAssignEl = document.getElementById('statAssign');
+const statHintEl = document.getElementById('statHint');
+const sheetSummaryEl = document.getElementById('sheetSummary');
 
 const logEl = document.getElementById('log');
 const thinkingEl = document.getElementById('thinking');
 const inputForm = document.getElementById('inputForm');
 const actionInput = document.getElementById('actionInput');
 const sendBtn = document.getElementById('sendBtn');
+const suggestBtn = document.getElementById('suggestBtn');
+const suggestionsEl = document.getElementById('suggestions');
 const newGameBtn = document.getElementById('newGameBtn');
 
 const charTitle = document.getElementById('charTitle');
@@ -35,7 +45,15 @@ const luStats = document.getElementById('luStats');
 const luMoves = document.getElementById('luMoves');
 const luConfirm = document.getElementById('luConfirm');
 
+// 위저드 상태
+let classesData = [];
+let statKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+let standardArray = [2, 1, 1, 0, -1, -1];
+let currentStep = 1;
 let selectedClass = null;
+let statMode = 'recommend'; // 'recommend' | 'custom'
+let customStats = null; // {STR:.., ...}
+
 let luAbility = null; // 선택한 능력치 key
 let luMove = null; // 선택한 무브 id
 let luNeedStat = false;
@@ -44,7 +62,10 @@ let luNeedMove = false;
 // ---------- 초기화 ----------
 socket.on('init', (data) => {
   modelNote.textContent = `모델: ${data.model}`;
-  renderClasses(data.classes);
+  classesData = data.classes || [];
+  if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
+  if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
+  renderClasses(classesData);
   if (data.hasCharacter) {
     showGame();
     if (data.character) updateStatus(data.character);
@@ -52,6 +73,7 @@ socket.on('init', (data) => {
     (data.log || []).forEach(renderLogEntry);
     scrollLog();
   } else {
+    resetWizard();
     showSetup();
   }
 });
@@ -59,6 +81,8 @@ socket.on('init', (data) => {
 socket.on('reset', () => {
   logEl.innerHTML = '';
   closeLevelUp();
+  clearSuggestions();
+  resetWizard();
   showSetup();
 });
 
@@ -88,6 +112,9 @@ socket.on('levelUp', (options) => {
 socket.on('levelUpDone', () => {
   closeLevelUp();
 });
+socket.on('suggestions', ({ items }) => {
+  renderSuggestions(items || []);
+});
 socket.on('error', ({ message }) => {
   renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
   scrollLog();
@@ -105,38 +132,193 @@ function showGame() {
   gameEl.classList.remove('hidden');
 }
 
-// ---------- 캐릭터 생성 ----------
+// ---------- 캐릭터 생성 (위저드) ----------
+function getClass(id) {
+  return classesData.find((c) => c.id === id);
+}
+
+function resetWizard() {
+  currentStep = 1;
+  selectedClass = null;
+  statMode = 'recommend';
+  customStats = null;
+  charNameEl.value = '';
+  charLookEl.value = '';
+  startBtn.disabled = false;
+  document
+    .querySelectorAll('.class-card')
+    .forEach((el) => el.classList.remove('selected'));
+  goToStep(1);
+}
+
 function renderClasses(classes) {
   classListEl.innerHTML = '';
   classes.forEach((c) => {
     const div = document.createElement('div');
     div.className = 'class-card';
     div.dataset.id = c.id;
-    const statLine = Object.entries(c.stats)
-      .map(([k, v]) => `${k} ${v >= 0 ? '+' + v : v}`)
+    const statLine = statKeys
+      .map((k) => `${k} ${fmtMod(c.stats[k])}`)
       .join('  ');
     div.innerHTML = `<div class="cname">${c.name}</div>
       <div class="cdesc">${c.description}</div>
-      <div class="cstats">HP ${c.maxHp} · ${statLine}</div>`;
+      <div class="cstats">HP ${c.maxHp} · 방어구 ${c.armor} · d${c.damageDie} · ${statLine}</div>`;
     div.addEventListener('click', () => {
       document
         .querySelectorAll('.class-card')
         .forEach((el) => el.classList.remove('selected'));
       div.classList.add('selected');
       selectedClass = c.id;
+      customStats = null; // 클래스 바뀌면 배분 초기화
+      updateNav();
     });
     classListEl.appendChild(div);
   });
 }
 
+function goToStep(step) {
+  currentStep = step;
+  document.querySelectorAll('.step-panel').forEach((p) => {
+    p.classList.toggle('hidden', Number(p.dataset.panel) !== step);
+  });
+  document.querySelectorAll('.step').forEach((s) => {
+    const n = Number(s.dataset.step);
+    s.classList.toggle('active', n === step);
+    s.classList.toggle('done', n < step);
+  });
+  if (step === 2) renderStatAssign();
+  if (step === 3) renderSheetSummary();
+  updateNav();
+}
+
+function updateNav() {
+  prevBtn.classList.toggle('hidden', currentStep === 1);
+  nextBtn.classList.toggle('hidden', currentStep === 3);
+  startBtn.classList.toggle('hidden', currentStep !== 3);
+
+  let ok = true;
+  if (currentStep === 1) ok = !!selectedClass;
+  if (currentStep === 2) ok = statMode === 'recommend' || isCustomValid();
+  if (currentStep === 3) ok = charNameEl.value.trim().length > 0;
+  nextBtn.disabled = !ok;
+  startBtn.disabled = !ok;
+}
+
+// --- 능력치 배분 ---
+function renderStatAssign() {
+  const cls = getClass(selectedClass);
+  if (!cls) return;
+  const recommend = statMode === 'recommend';
+  modeRecommend.classList.toggle('active', recommend);
+  modeCustom.classList.toggle('active', !recommend);
+
+  if (recommend) {
+    statHintEl.classList.remove('error');
+    statHintEl.textContent = `${cls.name}의 추천 능력치입니다.`;
+    statAssignEl.innerHTML = '';
+    statKeys.forEach((k) => {
+      const row = document.createElement('div');
+      row.className = 'srow';
+      row.innerHTML = `<div class="k">${k}</div><div class="v">${fmtMod(cls.stats[k])}</div>`;
+      statAssignEl.appendChild(row);
+    });
+    return;
+  }
+
+  // custom: 표준 배열을 각 능력치에 배치
+  if (!customStats) customStats = { ...cls.stats };
+  const distinct = [...new Set(standardArray)].sort((a, b) => b - a);
+  statAssignEl.innerHTML = '';
+  statKeys.forEach((k) => {
+    const row = document.createElement('div');
+    row.className = 'srow';
+    const opts = distinct
+      .map((v) => `<option value="${v}"${customStats[k] === v ? ' selected' : ''}>${fmtMod(v)}</option>`)
+      .join('');
+    row.innerHTML = `<div class="k">${k}</div><select data-k="${k}">${opts}</select>`;
+    row.querySelector('select').addEventListener('change', (e) => {
+      customStats[k] = Number(e.target.value);
+      updateCustomHint();
+      updateNav();
+    });
+    statAssignEl.appendChild(row);
+  });
+  updateCustomHint();
+}
+
+function neededCounts() {
+  const counts = {};
+  standardArray.forEach((v) => (counts[v] = (counts[v] || 0) + 1));
+  return counts;
+}
+
+function isCustomValid() {
+  if (!customStats) return false;
+  const need = neededCounts();
+  const have = {};
+  statKeys.forEach((k) => (have[customStats[k]] = (have[customStats[k]] || 0) + 1));
+  return Object.keys(need).every((v) => have[v] === need[v]) &&
+    Object.keys(have).length === Object.keys(need).length;
+}
+
+function updateCustomHint() {
+  const need = neededCounts();
+  const have = {};
+  statKeys.forEach((k) => (have[customStats[k]] = (have[customStats[k]] || 0) + 1));
+  if (isCustomValid()) {
+    statHintEl.classList.remove('error');
+    statHintEl.textContent = '유효한 배치입니다. (표준 배열 사용)';
+  } else {
+    const parts = Object.keys(need)
+      .sort((a, b) => b - a)
+      .map((v) => `${fmtMod(Number(v))}×${need[v]}`)
+      .join(', ');
+    statHintEl.classList.add('error');
+    statHintEl.textContent = `표준 배열을 정확히 사용하세요: ${parts}`;
+  }
+}
+
+modeRecommend.addEventListener('click', () => {
+  statMode = 'recommend';
+  renderStatAssign();
+  updateNav();
+});
+modeCustom.addEventListener('click', () => {
+  statMode = 'custom';
+  renderStatAssign();
+  updateNav();
+});
+
+// --- 시트 요약 ---
+function renderSheetSummary() {
+  const cls = getClass(selectedClass);
+  if (!cls) return;
+  const stats = statMode === 'custom' && customStats ? customStats : cls.stats;
+  const statLine = statKeys.map((k) => `${k} ${fmtMod(stats[k])}`).join('  ');
+  sheetSummaryEl.innerHTML =
+    `<div><span class="lbl">클래스</span> ${cls.name}</div>` +
+    `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${cls.armor} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
+    `<div><span class="lbl">능력치</span> ${statLine}</div>` +
+    `<div><span class="lbl">시작 장비</span> ${cls.inventory.join(', ')}</div>`;
+}
+
+// --- 네비게이션 ---
+nextBtn.addEventListener('click', () => {
+  if (nextBtn.disabled) return;
+  goToStep(currentStep + 1);
+});
+prevBtn.addEventListener('click', () => goToStep(currentStep - 1));
+charNameEl.addEventListener('input', updateNav);
+
 startBtn.addEventListener('click', () => {
   const name = charNameEl.value.trim();
-  if (!name) return alert('캐릭터 이름을 입력하세요.');
-  if (!selectedClass) return alert('클래스를 선택하세요.');
+  if (!name || !selectedClass) return;
   startBtn.disabled = true;
   showGame();
   logEl.innerHTML = '';
-  socket.emit('createCharacter', { name, classId: selectedClass });
+  const payload = { name, classId: selectedClass, look: charLookEl.value.trim() };
+  if (statMode === 'custom' && isCustomValid()) payload.stats = customStats;
+  socket.emit('createCharacter', payload);
 });
 
 // ---------- 플레이어 입력 ----------
@@ -145,25 +327,59 @@ inputForm.addEventListener('submit', (e) => {
   const text = actionInput.value.trim();
   if (!text) return;
   actionInput.value = '';
+  clearSuggestions();
   socket.emit('playerAction', { text });
+});
+
+suggestBtn.addEventListener('click', () => {
+  if (suggestBtn.disabled) return;
+  clearSuggestions();
+  socket.emit('suggestActions');
 });
 
 newGameBtn.addEventListener('click', () => {
   if (confirm('현재 진행을 지우고 새 게임을 시작할까요?')) {
-    selectedClass = null;
-    charNameEl.value = '';
-    startBtn.disabled = false;
-    document
-      .querySelectorAll('.class-card')
-      .forEach((el) => el.classList.remove('selected'));
+    clearSuggestions();
     socket.emit('resetGame');
   }
 });
 
 function setBusy(busy) {
   sendBtn.disabled = busy;
+  suggestBtn.disabled = busy;
   actionInput.disabled = busy;
   if (!busy) actionInput.focus();
+}
+
+function fmtMod(v) {
+  return v >= 0 ? '+' + v : '' + v;
+}
+
+// ---------- 행동 제안 ----------
+function renderSuggestions(items) {
+  suggestionsEl.innerHTML = '';
+  if (!items.length) {
+    suggestionsEl.classList.add('hidden');
+    return;
+  }
+  items.forEach((text) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'suggestion-chip';
+    chip.textContent = text;
+    chip.addEventListener('click', () => {
+      actionInput.value = text;
+      actionInput.focus();
+      clearSuggestions();
+    });
+    suggestionsEl.appendChild(chip);
+  });
+  suggestionsEl.classList.remove('hidden');
+}
+
+function clearSuggestions() {
+  suggestionsEl.innerHTML = '';
+  suggestionsEl.classList.add('hidden');
 }
 
 // ---------- 렌더 ----------
