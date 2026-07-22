@@ -8,7 +8,7 @@ const { GoogleGenAI, Type } = require('@google/genai');
  * Gemini 스키마는 nullable/propertyOrdering 등 자체 형식을 쓴다(Anthropic과 다름).
  */
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 let client = null;
 function getClient() {
@@ -74,8 +74,7 @@ async function generate({ staticSystem, dynamicSystem, messages }) {
       systemInstruction: `${staticSystem}\n\n${dynamicSystem}`,
       responseMimeType: 'application/json',
       responseSchema: SCHEMA,
-      thinkingConfig: { thinkingBudget: 0 }, // 반응 속도를 위해 사고 비활성화
-      maxOutputTokens: 1024,
+      // 참고: 최신 Gemini flash(3.x)는 thinkingBudget:0을 거부하므로 사고 설정을 두지 않는다.
     },
   });
   const text = resp.text;
