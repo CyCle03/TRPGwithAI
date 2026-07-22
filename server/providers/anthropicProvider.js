@@ -15,6 +15,18 @@ function getClient() {
   return client;
 }
 
+// NPC(적/동료) 항목 스키마 — 이름 + 상태(체력 서술) + 특징.
+const NPC_ITEM = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'hp', 'note'],
+  properties: {
+    name: { type: 'string' },
+    hp: { type: ['string', 'null'] },
+    note: { type: ['string', 'null'] },
+  },
+};
+
 // Anthropic JSON Schema (strict 호환: 모든 필드 required + nullable).
 const SCHEMA = {
   type: 'object',
@@ -25,7 +37,10 @@ const SCHEMA = {
     action: {
       type: 'object',
       additionalProperties: false,
-      required: ['type', 'move', 'stat', 'reason', 'hpDelta', 'addItems', 'removeItems'],
+      required: [
+        'type', 'move', 'stat', 'reason', 'hpDelta',
+        'addItems', 'removeItems', 'enemies', 'companions',
+      ],
       properties: {
         type: { type: 'string', enum: ['roll', 'update_state', 'none'] },
         move: { type: ['string', 'null'] },
@@ -34,6 +49,8 @@ const SCHEMA = {
         hpDelta: { type: ['integer', 'null'] },
         addItems: { type: 'array', items: { type: 'string' } },
         removeItems: { type: 'array', items: { type: 'string' } },
+        enemies: { type: ['array', 'null'], items: NPC_ITEM },
+        companions: { type: ['array', 'null'], items: NPC_ITEM },
       },
     },
   },

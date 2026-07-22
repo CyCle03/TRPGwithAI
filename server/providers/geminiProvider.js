@@ -20,6 +20,23 @@ function getClient() {
   return client;
 }
 
+// NPC(적/동료) 항목 스키마
+const NPC_ITEM = {
+  type: Type.OBJECT,
+  properties: {
+    name: { type: Type.STRING },
+    hp: { type: Type.STRING, nullable: true },
+    note: { type: Type.STRING, nullable: true },
+  },
+  required: ['name', 'hp', 'note'],
+  propertyOrdering: ['name', 'hp', 'note'],
+};
+
+const ACTION_FIELDS = [
+  'type', 'move', 'stat', 'reason', 'hpDelta',
+  'addItems', 'removeItems', 'enemies', 'companions',
+];
+
 const SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -34,9 +51,11 @@ const SCHEMA = {
         hpDelta: { type: Type.INTEGER, nullable: true },
         addItems: { type: Type.ARRAY, items: { type: Type.STRING } },
         removeItems: { type: Type.ARRAY, items: { type: Type.STRING } },
+        enemies: { type: Type.ARRAY, nullable: true, items: NPC_ITEM },
+        companions: { type: Type.ARRAY, nullable: true, items: NPC_ITEM },
       },
-      required: ['type', 'move', 'stat', 'reason', 'hpDelta', 'addItems', 'removeItems'],
-      propertyOrdering: ['type', 'move', 'stat', 'reason', 'hpDelta', 'addItems', 'removeItems'],
+      required: ACTION_FIELDS,
+      propertyOrdering: ACTION_FIELDS,
     },
   },
   required: ['narration', 'action'],

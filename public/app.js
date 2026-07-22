@@ -24,6 +24,9 @@ const learnMovesEl = document.getElementById('learnMoves');
 const sheetSummaryEl = document.getElementById('sheetSummary');
 
 const logEl = document.getElementById('log');
+const logInnerEl = document.getElementById('logInner');
+const enemiesEl = document.getElementById('enemies');
+const companionsEl = document.getElementById('companions');
 const thinkingEl = document.getElementById('thinking');
 const inputForm = document.getElementById('inputForm');
 const actionInput = document.getElementById('actionInput');
@@ -76,7 +79,8 @@ socket.on('init', (data) => {
   if (data.hasCharacter) {
     showGame();
     if (data.character) updateStatus(data.character);
-    logEl.innerHTML = '';
+    renderField(data.enemies, data.companions);
+    logInnerEl.innerHTML = '';
     (data.log || []).forEach(renderLogEntry);
     scrollLog();
   } else {
@@ -86,7 +90,8 @@ socket.on('init', (data) => {
 });
 
 socket.on('reset', () => {
-  logEl.innerHTML = '';
+  logInnerEl.innerHTML = '';
+  renderField([], []);
   closeLevelUp();
   clearSuggestions();
   resetWizard();
@@ -108,6 +113,9 @@ socket.on('systemLog', (entry) => {
 });
 socket.on('stateUpdate', (character) => {
   updateStatus(character);
+});
+socket.on('fieldUpdate', ({ enemies, companions }) => {
+  renderField(enemies, companions);
 });
 socket.on('gmThinking', ({ on }) => {
   thinkingEl.classList.toggle('hidden', !on);
@@ -383,7 +391,8 @@ startBtn.addEventListener('click', () => {
   if (!name || !selectedClass) return;
   startBtn.disabled = true;
   showGame();
-  logEl.innerHTML = '';
+  logInnerEl.innerHTML = '';
+  renderField([], []);
   const payload = {
     name,
     classId: selectedClass,
@@ -460,7 +469,39 @@ function renderLogEntry(entry) {
   const div = document.createElement('div');
   div.className = 'entry ' + (entry.kind || 'gm');
   div.textContent = entry.text;
-  logEl.appendChild(div);
+  logInnerEl.appendChild(div);
+}
+
+// ---------- 적/동료 필드 ----------
+function renderField(enemies, companions) {
+  renderNpcList(enemiesEl, enemies || [], 'enemy');
+  renderNpcList(companionsEl, companions || [], 'ally');
+}
+
+function renderNpcList(el, list, kind) {
+  el.innerHTML = '';
+  if (!list.length) {
+    const d = document.createElement('div');
+    d.className = 'empty';
+    d.textContent = kind === 'enemy' ? '(적 없음)' : '(동료 없음)';
+    el.appendChild(d);
+    return;
+  }
+  list.forEach((n) => {
+    const d = document.createElement('div');
+    d.className = 'npc ' + kind;
+    let html = `<div class="n-name">${escapeHtml(n.name)}</div>`;
+    if (n.hp) html += `<div class="n-hp">${escapeHtml(n.hp)}</div>`;
+    if (n.note) html += `<div class="n-note">${escapeHtml(n.note)}</div>`;
+    d.innerHTML = html;
+    el.appendChild(d);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])
+  );
 }
 
 function scrollLog() {

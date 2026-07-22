@@ -73,12 +73,20 @@
 
     <!-- 게임 화면 -->
     <div id="game" class="game hidden">
+      <!-- 좌측: 필드 정보 (적 / 동료) -->
+      <aside class="field-pane">
+        <h3>⚔️ 적</h3>
+        <div id="enemies" class="npc-list"></div>
+        <h3>🤝 동료</h3>
+        <div id="companions" class="npc-list"></div>
+      </aside>
+
       <main class="log-pane">
         <header class="log-header">
           <span>🎲 던전 월드</span>
           <button id="newGameBtn" class="ghost" title="새 게임">새 게임</button>
         </header>
-        <div id="log" class="log"></div>
+        <div id="log" class="log"><div id="logInner" class="log-inner"></div></div>
         <div id="thinking" class="thinking hidden">GM이 이야기를 짜는 중…</div>
         <div id="suggestions" class="suggestions hidden"></div>
         <form id="inputForm" class="input-bar">

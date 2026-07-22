@@ -29,6 +29,8 @@ class GameSession {
     this.log = data?.log || []; // 화면 표시용 로그 [{kind, text}]
     this.summary = data?.summary || ''; // 진행 상황 요약(현재는 최근 서사 기반)
     this.pendingLevelUp = data?.pendingLevelUp || null; // 레벨업 선택 대기 옵션
+    this.enemies = data?.enemies || []; // 현재 장면의 적 NPC
+    this.companions = data?.companions || []; // 현재 장면의 동료 NPC
     this.busy = false;
   }
 
@@ -43,6 +45,8 @@ class GameSession {
       log: this.log,
       summary: this.summary,
       pendingLevelUp: this.pendingLevelUp,
+      enemies: this.enemies,
+      companions: this.companions,
     };
   }
 
@@ -70,8 +74,11 @@ class GameSession {
     this.log = [];
     this.summary = '';
     this.pendingLevelUp = null;
+    this.enemies = [];
+    this.companions = [];
 
     emit('stateUpdate', this.character);
+    emit('fieldUpdate', { enemies: this.enemies, companions: this.companions });
     this._pushLog(
       emit,
       'system',
@@ -187,6 +194,9 @@ class GameSession {
 
     const action = result.action;
 
+    // 적/동료 목록 변화 반영 (모든 응답 유형에서 가능)
+    this._applyFieldUpdate(emit, action);
+
     if (action.type === 'update_state') {
       this._applyAndEmit(emit, action);
       return;
@@ -197,6 +207,22 @@ class GameSession {
       return;
     }
     // type === 'none' 또는 roll 미허용: 종료
+  }
+
+  /** 적/동료 목록 변화를 반영한다. null이면 유지, 배열이면 교체. */
+  _applyFieldUpdate(emit, action) {
+    let changed = false;
+    if (Array.isArray(action.enemies)) {
+      this.enemies = action.enemies;
+      changed = true;
+    }
+    if (Array.isArray(action.companions)) {
+      this.companions = action.companions;
+      changed = true;
+    }
+    if (changed) {
+      emit('fieldUpdate', { enemies: this.enemies, companions: this.companions });
+    }
   }
 
   /** 판정 요청을 코드가 굴리고, 결과를 다시 AI에 먹여 서사화한다. */

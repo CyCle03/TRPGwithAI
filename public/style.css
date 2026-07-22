@@ -329,8 +329,64 @@ button.primary:disabled {
 /* ---------- 게임 레이아웃 ---------- */
 .game {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 260px 1fr 320px;
   height: 100vh;
+}
+
+/* 좌측 필드 패널 (적/동료) */
+.field-pane {
+  background: var(--panel);
+  padding: 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+.field-pane h3 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.field-pane h3:not(:first-child) {
+  margin-top: 20px;
+}
+.npc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.npc {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 8px 11px;
+}
+.npc.enemy {
+  border-left-color: var(--danger);
+}
+.npc.ally {
+  border-left-color: var(--state);
+}
+.npc .n-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.npc .n-hp {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+}
+.npc .n-note {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.npc-list .empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.82rem;
 }
 .log-pane {
   display: flex;
@@ -366,6 +422,11 @@ button.ghost:hover {
   flex: 1;
   overflow-y: auto;
   padding: 18px;
+}
+.log-inner {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -734,13 +795,24 @@ button.ghost:hover {
   padding-top: 10px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .game {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr auto auto;
+  }
+  .log-pane {
+    order: 0;
+    border-right: none;
+  }
+  .field-pane {
+    order: 1;
+    max-height: 28vh;
+    border-right: none;
+    border-top: 1px solid var(--border);
   }
   .status-pane {
-    max-height: 38vh;
+    order: 2;
+    max-height: 40vh;
     border-top: 1px solid var(--border);
   }
 }

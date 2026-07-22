@@ -48,6 +48,8 @@ io.on('connection', (socket) => {
     hasCharacter: session.hasCharacter(),
     character: session.character,
     log: session.log,
+    enemies: session.enemies,
+    companions: session.companions,
   });
   // 저장된 레벨업 선택이 대기 중이면 다시 띄운다
   if (session.pendingLevelUp) socket.emit('levelUp', session.pendingLevelUp);
@@ -108,6 +110,8 @@ io.on('connection', (socket) => {
     session.log = [];
     session.summary = '';
     session.pendingLevelUp = null;
+    session.enemies = [];
+    session.companions = [];
     emit('reset', {});
   });
 });
