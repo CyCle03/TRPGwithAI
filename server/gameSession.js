@@ -50,9 +50,9 @@ class GameSession {
     };
   }
 
-  /** 화면 로그에 추가하고 이벤트로도 내보낸다. */
-  _pushLog(emit, kind, text, event = 'systemLog') {
-    const entry = { kind, text };
+  /** 화면 로그에 추가하고 이벤트로도 내보낸다. extra는 엔트리에 병합(예: {tier}). */
+  _pushLog(emit, kind, text, event = 'systemLog', extra = null) {
+    const entry = extra ? { kind, text, ...extra } : { kind, text };
     this.log.push(entry);
     emit(event, entry);
   }
@@ -197,6 +197,13 @@ class GameSession {
     // 적/동료 목록 변화 반영 (모든 응답 유형에서 가능)
     this._applyFieldUpdate(emit, action);
 
+    // GM이 성취 보너스 경험치를 줬으면 반영
+    if (action.xpGain && action.xpGain > 0) {
+      this.character.xp += action.xpGain;
+      emit('stateUpdate', this.character);
+      this._pushLog(emit, 'state', `✨ 경험치 +${action.xpGain} (성취)`);
+    }
+
     if (action.type === 'update_state') {
       this._applyAndEmit(emit, action);
       return;
@@ -230,12 +237,13 @@ class GameSession {
     const roll = rules.resolveMove(action.stat, this.character);
     const moveName = action.move || '판정';
 
-    // 주사위 결과를 로그에 구분 표시
+    // 주사위 결과를 로그에 구분 표시 (tier 포함 → 클라 애니메이션/색상)
     this._pushLog(
       emit,
       'dice',
       `${moveName} — ${rules.formatRoll(roll)}`,
-      'dice'
+      'dice',
+      { tier: roll.tier }
     );
 
     // 던전 월드: 6- 실패에서 경험치 획득 ("실패에서 배운다")

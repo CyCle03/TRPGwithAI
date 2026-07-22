@@ -63,6 +63,7 @@ let statMode = 'recommend'; // 'recommend' | 'custom'
 let customStats = null; // {STR:.., ...}
 let selectedGear = []; // 선택한 장비 id 배열
 const TOTAL_STEPS = 4;
+let prevHp = null; // HP 변화 애니메이션용
 
 let luAbility = null; // 선택한 능력치 key
 let luMove = null; // 선택한 무브 id
@@ -90,6 +91,7 @@ socket.on('init', (data) => {
 });
 
 socket.on('reset', () => {
+  prevHp = null;
   logInnerEl.innerHTML = '';
   renderField([], []);
   closeLevelUp();
@@ -104,8 +106,7 @@ socket.on('narration', (entry) => {
   scrollLog();
 });
 socket.on('dice', (entry) => {
-  renderLogEntry(entry);
-  scrollLog();
+  animateDiceRoll(entry);
 });
 socket.on('systemLog', (entry) => {
   renderLogEntry(entry);
@@ -390,6 +391,7 @@ startBtn.addEventListener('click', () => {
   const name = charNameEl.value.trim();
   if (!name || !selectedClass) return;
   startBtn.disabled = true;
+  prevHp = null;
   showGame();
   logInnerEl.innerHTML = '';
   renderField([], []);
@@ -468,8 +470,32 @@ function clearSuggestions() {
 function renderLogEntry(entry) {
   const div = document.createElement('div');
   div.className = 'entry ' + (entry.kind || 'gm');
+  if (entry.kind === 'dice' && entry.tier) div.classList.add('tier-' + entry.tier);
   div.textContent = entry.text;
   logInnerEl.appendChild(div);
+}
+
+// 주사위 굴림 애니메이션: 잠깐 숫자가 돌다가 결과로 정착
+function animateDiceRoll(entry) {
+  const div = document.createElement('div');
+  div.className = 'entry dice rolling';
+  div.textContent = '🎲 주사위를 굴리는 중...';
+  logInnerEl.appendChild(div);
+  scrollLog();
+  let ticks = 0;
+  const iv = setInterval(() => {
+    const a = 1 + Math.floor(Math.random() * 6);
+    const b = 1 + Math.floor(Math.random() * 6);
+    div.textContent = `🎲 [${a}, ${b}] 굴리는 중...`;
+    if (++ticks >= 8) {
+      clearInterval(iv);
+      div.classList.remove('rolling');
+      div.classList.add('settled');
+      if (entry.tier) div.classList.add('tier-' + entry.tier);
+      div.textContent = entry.text;
+      scrollLog();
+    }
+  }, 85);
 }
 
 // ---------- 적/동료 필드 ----------
@@ -509,6 +535,9 @@ function scrollLog() {
 }
 
 function updateStatus(c) {
+  if (prevHp !== null && c.hp !== prevHp) flashHp(c.hp - prevHp);
+  prevHp = c.hp;
+
   charTitle.textContent = `${c.name} · ${c.className}`;
 
   const level = c.level || 1;
@@ -561,9 +590,28 @@ function updateStatus(c) {
     });
   }
 
-  // 변경 강조
-  hpText.classList.add('flash');
-  setTimeout(() => hpText.classList.remove('flash'), 900);
+}
+
+// HP 변화 시 부동 숫자 + 흔들림/번쩍 효과
+function flashHp(delta) {
+  const statusPane = document.querySelector('.status-pane');
+  const hpBlock = document.querySelector('.hp-block');
+  if (hpBlock) {
+    const f = document.createElement('div');
+    f.className = 'float-num ' + (delta < 0 ? 'dmg' : 'heal');
+    f.textContent = (delta < 0 ? '' : '+') + delta;
+    hpBlock.appendChild(f);
+    setTimeout(() => f.remove(), 1000);
+  }
+  hpBar.classList.remove('flash-dmg', 'flash-heal');
+  void hpBar.offsetWidth; // 리플로우로 애니메이션 재시작
+  hpBar.classList.add(delta < 0 ? 'flash-dmg' : 'flash-heal');
+  if (delta < 0 && statusPane) {
+    statusPane.classList.remove('shake');
+    void statusPane.offsetWidth;
+    statusPane.classList.add('shake');
+    setTimeout(() => statusPane.classList.remove('shake'), 460);
+  }
 }
 
 // ---------- 레벨업 모달 ----------

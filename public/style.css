@@ -580,6 +580,87 @@ button.ghost:hover {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
+  position: relative;
+}
+
+/* ---------- 전투 효과 / 애니메이션 ---------- */
+/* 주사위 굴림 */
+.entry.dice.rolling {
+  animation: diceShake 0.28s infinite;
+}
+.entry.dice.settled {
+  animation: dicePop 0.4s ease;
+}
+@keyframes diceShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-3px) rotate(-4deg); }
+  75% { transform: translateX(3px) rotate(4deg); }
+}
+@keyframes dicePop {
+  0% { transform: scale(0.82); }
+  55% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+.entry.dice.tier-strong {
+  border-color: var(--state);
+  box-shadow: 0 0 14px rgba(127, 212, 138, 0.5);
+}
+.entry.dice.tier-weak {
+  border-color: var(--dice);
+  box-shadow: 0 0 12px rgba(240, 200, 107, 0.4);
+}
+.entry.dice.tier-miss {
+  border-color: var(--danger);
+  box-shadow: 0 0 14px rgba(229, 115, 115, 0.5);
+}
+
+/* 피해/회복 부동 숫자 */
+.float-num {
+  position: absolute;
+  right: 14px;
+  top: 8px;
+  font-weight: 800;
+  font-size: 1.15rem;
+  pointer-events: none;
+  animation: floatUp 1s ease forwards;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.float-num.dmg { color: var(--danger); }
+.float-num.heal { color: var(--state); }
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(8px); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-24px); }
+}
+
+/* 피해 시 상태창 흔들림 + HP바 번쩍 */
+.status-pane.shake {
+  animation: shakeX 0.45s;
+}
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px); }
+  30% { transform: translateX(6px); }
+  45% { transform: translateX(-5px); }
+  60% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+.hp-bar-inner.flash-dmg { animation: hpDmg 0.6s; }
+.hp-bar-inner.flash-heal { animation: hpHeal 0.6s; }
+@keyframes hpDmg {
+  0% { filter: brightness(2.4) saturate(2); }
+  100% { filter: none; }
+}
+@keyframes hpHeal {
+  0% { filter: brightness(1.7) hue-rotate(20deg); }
+  100% { filter: none; }
+}
+
+/* NPC 카드 등장 */
+.npc { animation: npcIn 0.35s ease; }
+@keyframes npcIn {
+  0% { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .hp-label {
   display: flex;

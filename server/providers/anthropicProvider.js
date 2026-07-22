@@ -39,7 +39,7 @@ const SCHEMA = {
       additionalProperties: false,
       required: [
         'type', 'move', 'stat', 'reason', 'hpDelta',
-        'addItems', 'removeItems', 'enemies', 'companions',
+        'addItems', 'removeItems', 'enemies', 'companions', 'xpGain',
       ],
       properties: {
         type: { type: 'string', enum: ['roll', 'update_state', 'none'] },
@@ -51,6 +51,7 @@ const SCHEMA = {
         removeItems: { type: 'array', items: { type: 'string' } },
         enemies: { type: ['array', 'null'], items: NPC_ITEM },
         companions: { type: ['array', 'null'], items: NPC_ITEM },
+        xpGain: { type: ['integer', 'null'] },
       },
     },
   },

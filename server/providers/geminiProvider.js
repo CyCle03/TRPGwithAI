@@ -34,7 +34,7 @@ const NPC_ITEM = {
 
 const ACTION_FIELDS = [
   'type', 'move', 'stat', 'reason', 'hpDelta',
-  'addItems', 'removeItems', 'enemies', 'companions',
+  'addItems', 'removeItems', 'enemies', 'companions', 'xpGain',
 ];
 
 const SCHEMA = {
@@ -53,6 +53,7 @@ const SCHEMA = {
         removeItems: { type: Type.ARRAY, items: { type: Type.STRING } },
         enemies: { type: Type.ARRAY, nullable: true, items: NPC_ITEM },
         companions: { type: Type.ARRAY, nullable: true, items: NPC_ITEM },
+        xpGain: { type: Type.INTEGER, nullable: true },
       },
       required: ACTION_FIELDS,
       propertyOrdering: ACTION_FIELDS,
