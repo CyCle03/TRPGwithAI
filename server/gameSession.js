@@ -64,8 +64,8 @@ class GameSession {
   }
 
   /** 캐릭터 생성 + AI GM 오프닝 장면. */
-  async createCharacter(emit, { name, classId, stats, look }) {
-    this.character = createCharacter(name, classId, { stats, look });
+  async createCharacter(emit, { name, classId, stats, look, gear }) {
+    this.character = createCharacter(name, classId, { stats, look, gear });
     this.messages = [];
     this.log = [];
     this.summary = '';

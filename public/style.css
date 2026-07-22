@@ -115,6 +115,12 @@ input[type='text']:focus {
   font-family: ui-monospace, monospace;
   line-height: 1.4;
 }
+.class-card .cmoves {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
 /* 위저드 스텝 */
 .steps {
   display: flex;
@@ -209,6 +215,67 @@ input[type='text']:focus {
   font-size: 1rem;
   text-align: center;
 }
+/* 장비 선택 */
+.base-gear {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.base-gear .bg-label {
+  color: var(--accent);
+}
+.gear-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.gear-chip {
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  text-align: center;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+.gear-chip:hover:not(.disabled) {
+  border-color: var(--accent-2);
+}
+.gear-chip.selected {
+  border-color: var(--accent);
+  background: #2a2410;
+}
+.gear-chip.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.learn-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.learn-move {
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  border-radius: 7px;
+  padding: 8px 11px;
+}
+.learn-move .lm-name {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.88rem;
+}
+.learn-move .lm-desc {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
 .sheet-summary {
   margin-top: 14px;
   background: var(--panel-2);

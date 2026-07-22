@@ -16,7 +16,8 @@
         <div class="steps">
           <span class="step active" data-step="1">1 · 클래스</span>
           <span class="step" data-step="2">2 · 능력치</span>
-          <span class="step" data-step="3">3 · 소개</span>
+          <span class="step" data-step="3">3 · 장비</span>
+          <span class="step" data-step="4">4 · 마무리</span>
         </div>
 
         <!-- Step 1: 클래스 -->
@@ -36,8 +37,19 @@
           <div id="statAssign" class="stat-assign"></div>
         </div>
 
-        <!-- Step 3: 소개 -->
+        <!-- Step 3: 장비 + 배울 기술 -->
         <div class="step-panel hidden" data-panel="3">
+          <label>시작 장비 선택 <span class="opt" id="gearCount">(0/2)</span></label>
+          <p class="hint" id="gearHint">기본 장비에 더해 아래에서 2개를 고르세요.</p>
+          <div id="baseGear" class="base-gear"></div>
+          <div id="gearOptions" class="gear-options"></div>
+          <label>이 클래스가 배울 수 있는 기술</label>
+          <p class="hint">레벨업 때 아래 기술 중 하나씩 습득합니다.</p>
+          <div id="learnMoves" class="learn-moves"></div>
+        </div>
+
+        <!-- Step 4: 이름/소개 + 시트 요약 -->
+        <div class="step-panel hidden" data-panel="4">
           <label>캐릭터 이름</label>
           <input id="charName" type="text" placeholder="예: 아린" maxlength="40" />
           <label>한 줄 소개 <span class="opt">(선택)</span></label>

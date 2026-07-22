@@ -16,6 +16,11 @@ const modeRecommend = document.getElementById('modeRecommend');
 const modeCustom = document.getElementById('modeCustom');
 const statAssignEl = document.getElementById('statAssign');
 const statHintEl = document.getElementById('statHint');
+const baseGearEl = document.getElementById('baseGear');
+const gearOptionsEl = document.getElementById('gearOptions');
+const gearCountEl = document.getElementById('gearCount');
+const gearHintEl = document.getElementById('gearHint');
+const learnMovesEl = document.getElementById('learnMoves');
 const sheetSummaryEl = document.getElementById('sheetSummary');
 
 const logEl = document.getElementById('log');
@@ -53,6 +58,8 @@ let currentStep = 1;
 let selectedClass = null;
 let statMode = 'recommend'; // 'recommend' | 'custom'
 let customStats = null; // {STR:.., ...}
+let selectedGear = []; // 선택한 장비 id 배열
+const TOTAL_STEPS = 4;
 
 let luAbility = null; // 선택한 능력치 key
 let luMove = null; // 선택한 무브 id
@@ -142,6 +149,7 @@ function resetWizard() {
   selectedClass = null;
   statMode = 'recommend';
   customStats = null;
+  selectedGear = [];
   charNameEl.value = '';
   charLookEl.value = '';
   startBtn.disabled = false;
@@ -160,9 +168,11 @@ function renderClasses(classes) {
     const statLine = statKeys
       .map((k) => `${k} ${fmtMod(c.stats[k])}`)
       .join('  ');
+    const moveNames = (c.moves || []).map((m) => m.name).join(', ');
     div.innerHTML = `<div class="cname">${c.name}</div>
       <div class="cdesc">${c.description}</div>
-      <div class="cstats">HP ${c.maxHp} · 방어구 ${c.armor} · d${c.damageDie} · ${statLine}</div>`;
+      <div class="cstats">HP ${c.maxHp} · 방어구 ${c.armor} · d${c.damageDie} · ${statLine}</div>
+      <div class="cmoves">배울 기술: ${moveNames}</div>`;
     div.addEventListener('click', () => {
       document
         .querySelectorAll('.class-card')
@@ -170,6 +180,7 @@ function renderClasses(classes) {
       div.classList.add('selected');
       selectedClass = c.id;
       customStats = null; // 클래스 바뀌면 배분 초기화
+      selectedGear = []; // 클래스 바뀌면 장비 초기화
       updateNav();
     });
     classListEl.appendChild(div);
@@ -187,21 +198,71 @@ function goToStep(step) {
     s.classList.toggle('done', n < step);
   });
   if (step === 2) renderStatAssign();
-  if (step === 3) renderSheetSummary();
+  if (step === 3) renderGear();
+  if (step === 4) renderSheetSummary();
   updateNav();
+}
+
+function gearPicksFor() {
+  const cls = getClass(selectedClass);
+  return cls ? cls.gearPicks || 2 : 2;
 }
 
 function updateNav() {
   prevBtn.classList.toggle('hidden', currentStep === 1);
-  nextBtn.classList.toggle('hidden', currentStep === 3);
-  startBtn.classList.toggle('hidden', currentStep !== 3);
+  nextBtn.classList.toggle('hidden', currentStep === TOTAL_STEPS);
+  startBtn.classList.toggle('hidden', currentStep !== TOTAL_STEPS);
 
   let ok = true;
   if (currentStep === 1) ok = !!selectedClass;
   if (currentStep === 2) ok = statMode === 'recommend' || isCustomValid();
-  if (currentStep === 3) ok = charNameEl.value.trim().length > 0;
+  if (currentStep === 3) ok = selectedGear.length === gearPicksFor();
+  if (currentStep === 4) ok = charNameEl.value.trim().length > 0;
   nextBtn.disabled = !ok;
   startBtn.disabled = !ok;
+}
+
+// --- 장비 선택 + 배울 기술 ---
+function renderGear() {
+  const cls = getClass(selectedClass);
+  if (!cls) return;
+  const picks = gearPicksFor();
+
+  // 기본(고정) 장비
+  baseGearEl.innerHTML = `<span class="bg-label">기본 장비:</span> ${cls.inventory.join(', ')}`;
+
+  // 선택 장비 후보
+  gearHintEl.textContent = `기본 장비에 더해 아래에서 ${picks}개를 고르세요.`;
+  gearOptionsEl.innerHTML = '';
+  (cls.gearOptions || []).forEach((g) => {
+    const chip = document.createElement('div');
+    const picked = selectedGear.includes(g.id);
+    const full = selectedGear.length >= picks && !picked;
+    chip.className = 'gear-chip' + (picked ? ' selected' : full ? ' disabled' : '');
+    chip.textContent = g.name;
+    if (!full || picked) {
+      chip.addEventListener('click', () => {
+        if (selectedGear.includes(g.id)) {
+          selectedGear = selectedGear.filter((x) => x !== g.id);
+        } else if (selectedGear.length < picks) {
+          selectedGear.push(g.id);
+        }
+        renderGear();
+        updateNav();
+      });
+    }
+    gearOptionsEl.appendChild(chip);
+  });
+  gearCountEl.textContent = `(${selectedGear.length}/${picks})`;
+
+  // 배울 수 있는 기술
+  learnMovesEl.innerHTML = '';
+  (cls.moves || []).forEach((m) => {
+    const div = document.createElement('div');
+    div.className = 'learn-move';
+    div.innerHTML = `<div class="lm-name">${m.name}</div><div class="lm-desc">${m.desc}</div>`;
+    learnMovesEl.appendChild(div);
+  });
 }
 
 // --- 능력치 배분 ---
@@ -295,11 +356,18 @@ function renderSheetSummary() {
   if (!cls) return;
   const stats = statMode === 'custom' && customStats ? customStats : cls.stats;
   const statLine = statKeys.map((k) => `${k} ${fmtMod(stats[k])}`).join('  ');
+  const pickedNames = selectedGear
+    .map((id) => (cls.gearOptions || []).find((o) => o.id === id))
+    .filter(Boolean)
+    .map((o) => o.name);
+  const allGear = [...cls.inventory, ...pickedNames];
+  const moveNames = (cls.moves || []).map((m) => m.name).join(', ');
   sheetSummaryEl.innerHTML =
     `<div><span class="lbl">클래스</span> ${cls.name}</div>` +
     `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${cls.armor} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
     `<div><span class="lbl">능력치</span> ${statLine}</div>` +
-    `<div><span class="lbl">시작 장비</span> ${cls.inventory.join(', ')}</div>`;
+    `<div><span class="lbl">장비</span> ${allGear.join(', ')}</div>` +
+    `<div><span class="lbl">배울 기술</span> ${moveNames}</div>`;
 }
 
 // --- 네비게이션 ---
@@ -316,7 +384,12 @@ startBtn.addEventListener('click', () => {
   startBtn.disabled = true;
   showGame();
   logEl.innerHTML = '';
-  const payload = { name, classId: selectedClass, look: charLookEl.value.trim() };
+  const payload = {
+    name,
+    classId: selectedClass,
+    look: charLookEl.value.trim(),
+    gear: selectedGear,
+  };
   if (statMode === 'custom' && isCustomValid()) payload.stats = customStats;
   socket.emit('createCharacter', payload);
 });

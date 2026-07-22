@@ -128,6 +128,36 @@ const ADVANCED_MOVES = {
 const HP_PER_LEVEL = 3; // 레벨업 시 최대 HP 증가량 (단순화 규칙)
 const STAT_CAP = 3; // 능력치 보정 상한
 
+// 시작 시 선택하는 추가 장비 (기본 장비에 더해 GEAR_PICKS개 선택).
+const GEAR_PICKS = 2;
+const COMMON_GEAR = [
+  { id: 'potion', name: '치유 물약' },
+  { id: 'rope', name: '밧줄과 갈고리' },
+  { id: 'torches', name: '횃불 다발' },
+  { id: 'bandages', name: '붕대와 약초' },
+];
+// 클래스별 특색 있는 선택 장비 1종
+const CLASS_SPECIAL_GEAR = {
+  fighter: '투척용 단검 3자루',
+  wizard: '마법 재료 주머니',
+  cleric: '성수 한 병',
+  thief: '독 묻은 침 3개',
+  ranger: '사냥용 미끼와 올가미',
+  bard: '값진 장신구',
+  paladin: '성전의 깃발',
+  druid: '희귀 약초 표본',
+};
+
+/** 해당 클래스의 선택 가능한 시작 장비 목록. */
+function getGearOptions(classId) {
+  const cls = CLASSES[classId] || CLASSES.fighter;
+  const opts = COMMON_GEAR.map((g) => ({ ...g }));
+  if (CLASS_SPECIAL_GEAR[cls.id]) {
+    opts.push({ id: 'special', name: CLASS_SPECIAL_GEAR[cls.id] });
+  }
+  return opts;
+}
+
 /** 레벨업 임계값: 현재 레벨 + 7 (던전 월드 방식). */
 function xpToLevel(level) {
   return level + 7;
@@ -205,7 +235,7 @@ function isValidStatArray(stats) {
  * 클래스 프리셋으로 새 캐릭터 상태 객체를 만든다.
  * @param {string} name
  * @param {string} classId
- * @param {object} [opts] { stats?: 직접 배분한 보정치, look?: 한 줄 소개 }
+ * @param {object} [opts] { stats?: 직접 배분한 보정치, look?: 한 줄 소개, gear?: 선택 장비 id 배열 }
  */
 function createCharacter(name, classId, opts = {}) {
   const cls = CLASSES[classId] || CLASSES.fighter;
@@ -213,6 +243,14 @@ function createCharacter(name, classId, opts = {}) {
   const stats = isValidStatArray(opts.stats)
     ? Object.fromEntries(STAT_KEYS.map((k) => [k, opts.stats[k]]))
     : { ...cls.stats };
+  // 선택 장비: 유효한 id만, 중복 제거, 최대 GEAR_PICKS개
+  const options = getGearOptions(cls.id);
+  const pickedIds = Array.isArray(opts.gear) ? [...new Set(opts.gear)] : [];
+  const pickedNames = pickedIds
+    .map((id) => options.find((o) => o.id === id))
+    .filter(Boolean)
+    .slice(0, GEAR_PICKS)
+    .map((o) => o.name);
   return {
     name: String(name || '이름 없는 모험가').slice(0, 40),
     classId: cls.id,
@@ -224,7 +262,7 @@ function createCharacter(name, classId, opts = {}) {
     hp: cls.maxHp,
     armor: cls.armor,
     stats,
-    inventory: [...cls.inventory],
+    inventory: [...cls.inventory, ...pickedNames],
     moves: [],
     damageDie: cls.damageDie,
   };
@@ -248,8 +286,10 @@ function listClasses() {
     armor: c.armor,
     damageDie: c.damageDie,
     stats: c.stats,
-    inventory: c.inventory,
-    moves: (ADVANCED_MOVES[c.id] || []).map((m) => m.name),
+    inventory: c.inventory, // 기본(고정) 장비
+    gearOptions: getGearOptions(c.id), // 선택 장비 후보
+    gearPicks: GEAR_PICKS, // 선택 개수
+    moves: ADVANCED_MOVES[c.id] || [], // 배울 수 있는 기술 (전체 {id,name,desc})
   }));
 }
 
