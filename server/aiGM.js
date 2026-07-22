@@ -1,72 +1,33 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
 const { MOVES_SUMMARY } = require('./dungeonWorld');
 const { ABILITIES } = require('./rulesEngine');
 
 /**
- * AI GM (Claude API) — 서사/연출/무브 판단 담당.
- * 규칙 엔진과의 통신을 위해 응답을 반드시 { narration, action } 구조로 받는다.
- * Structured Outputs(JSON 스키마)로 형식을 강제해 파싱 실패를 방지한다.
+ * AI GM — 서사/연출/무브 판단 담당.
+ * 프롬프트·스키마 구성은 여기서 하고, 실제 모델 호출은 provider에 위임한다.
+ * .env의 AI_PROVIDER 로 anthropic(Claude) / gemini(무료) 를 토글한다.
  */
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+const PROVIDER_NAME = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
 
-const client = new Anthropic(); // ANTHROPIC_API_KEY 환경변수 자동 사용
+function loadProvider() {
+  switch (PROVIDER_NAME) {
+    case 'anthropic':
+    case 'claude':
+      return require('./providers/anthropicProvider');
+    case 'gemini':
+    case 'google':
+      return require('./providers/geminiProvider');
+    default:
+      throw new Error(`알 수 없는 AI_PROVIDER: ${PROVIDER_NAME} (anthropic | gemini)`);
+  }
+}
 
-// AI GM 응답 스키마. strict 호환을 위해 모든 필드를 required + nullable 로 둔다.
-const RESPONSE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['narration', 'action'],
-  properties: {
-    narration: {
-      type: 'string',
-      description: '플레이어에게 보여줄 서사 텍스트 (한국어). NPC 대사와 장면 묘사를 포함.',
-    },
-    action: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['type', 'move', 'stat', 'reason', 'hpDelta', 'addItems', 'removeItems'],
-      properties: {
-        type: {
-          type: 'string',
-          enum: ['roll', 'update_state', 'none'],
-          description:
-            'roll=주사위 판정 필요, update_state=HP/인벤토리 변경, none=순수 묘사/대화',
-        },
-        move: {
-          type: ['string', 'null'],
-          description: 'roll일 때 사용하는 무브 이름 (예: 위험에 맞서기, 손상 입히기).',
-        },
-        stat: {
-          type: ['string', 'null'],
-          description: `roll일 때 사용하는 능력치. ${ABILITIES.join(', ')} 중 하나.`,
-        },
-        reason: {
-          type: ['string', 'null'],
-          description: '판정 또는 상태 변경의 짧은 이유.',
-        },
-        hpDelta: {
-          type: ['integer', 'null'],
-          description: 'update_state일 때 HP 변화량. 피해는 음수, 회복은 양수.',
-        },
-        addItems: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '인벤토리에 추가할 아이템 목록. 없으면 빈 배열.',
-        },
-        removeItems: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '인벤토리에서 제거/소모할 아이템 목록. 없으면 빈 배열.',
-        },
-      },
-    },
-  },
-};
+const provider = loadProvider();
+const MODEL = provider.MODEL;
 
-// 정적 규칙/역할 지시 (프롬프트 캐시 대상 — 매 턴 동일).
+// 정적 규칙/역할 지시 (매 턴 동일 — Claude에서는 프롬프트 캐시 대상).
 const STATIC_SYSTEM = `너는 1인용 던전 월드(PbtA) 게임의 게임 마스터(GM)다. 플레이어 한 명과 함께 짧은 판타지 모험을 진행한다.
 
 [역할 분리 — 매우 중요]
@@ -94,7 +55,7 @@ ${MOVES_SUMMARY}
 
 응답은 반드시 지정된 JSON 스키마(narration + action)로만 출력하라.`;
 
-/** 현재 상태 요약 (동적) — GM이 맥락을 잃지 않도록 시스템 프롬프트에 넣는다. */
+/** 현재 상태 요약 (동적) — GM이 맥락을 잃지 않도록. */
 function buildStateSummary(session) {
   const c = session.character;
   const statLine = ABILITIES.map((k) => `${k} ${fmtMod(c.stats[k])}`).join(' ');
@@ -113,31 +74,20 @@ function fmtMod(m) {
 }
 
 /**
- * Claude를 호출해 { narration, action } 을 받아온다.
+ * 선택된 provider로 { narration, action } 을 받아온다.
  * @param {object} session
- * @param {Array} messages  Anthropic 형식 대화 메시지 (최근 N턴)
+ * @param {Array}  messages
  */
 async function callGM(session, messages) {
-  const resp = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    thinking: { type: 'disabled' }, // 게임 반응 속도를 위해 사고 비활성화
-    system: [
-      { type: 'text', text: STATIC_SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: buildStateSummary(session) },
-    ],
+  const jsonText = await provider.generate({
+    staticSystem: STATIC_SYSTEM,
+    dynamicSystem: buildStateSummary(session),
     messages,
-    output_config: {
-      format: { type: 'json_schema', schema: RESPONSE_SCHEMA },
-    },
   });
-
-  const textBlock = resp.content.find((b) => b.type === 'text');
-  if (!textBlock) throw new Error('AI GM 응답에 텍스트 블록이 없습니다.');
 
   let parsed;
   try {
-    parsed = JSON.parse(textBlock.text);
+    parsed = JSON.parse(jsonText);
   } catch (e) {
     throw new Error('AI GM 응답 JSON 파싱 실패: ' + e.message);
   }
@@ -162,4 +112,4 @@ function normalize(parsed) {
   };
 }
 
-module.exports = { callGM, MODEL };
+module.exports = { callGM, MODEL, PROVIDER: provider.name };

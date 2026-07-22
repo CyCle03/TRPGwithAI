@@ -9,14 +9,17 @@ const { Server } = require('socket.io');
 
 const { GameSession } = require('./gameSession');
 const { listClasses } = require('./dungeonWorld');
-const { MODEL } = require('./aiGM');
+const { MODEL, PROVIDER } = require('./aiGM');
 const store = require('./store');
 
 const PORT = process.env.PORT || 3000;
 
-if (!process.env.ANTHROPIC_API_KEY) {
+// provider에 맞는 API 키가 있는지 확인
+const KEY_ENV = PROVIDER === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
+const hasKey = !!process.env[KEY_ENV];
+if (!hasKey) {
   console.warn(
-    '\n⚠️  ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 파일에 키를 넣어야 AI GM이 동작합니다.\n'
+    `\n⚠️  ${KEY_ENV} 가 설정되지 않았습니다. .env 파일에 키를 넣어야 AI GM이 동작합니다.\n`
   );
 }
 
@@ -30,7 +33,7 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, model: MODEL, hasKey: !!process.env.ANTHROPIC_API_KEY });
+  res.json({ ok: true, provider: PROVIDER, model: MODEL, hasKey });
 });
 
 io.on('connection', (socket) => {
@@ -84,5 +87,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`\n🎲 AI GM 던전 월드 실행 중: http://localhost:${PORT}`);
-  console.log(`   모델: ${MODEL}\n`);
+  console.log(`   provider: ${PROVIDER} / 모델: ${MODEL}\n`);
 });

@@ -20,16 +20,29 @@ AI 응답은 [Structured Outputs](https://platform.claude.com/docs/en/build-with
    ```bash
    npm install
    ```
-2. `.env` 파일에 Anthropic API 키 입력 (`.env.example` 참고). 키는 **서버에서만** 사용되며 클라이언트에 노출되지 않는다.
+2. `.env` 파일에 API 키 입력 (`.env.example` 참고). 키는 **서버에서만** 사용되며 클라이언트에 노출되지 않는다. AI GM 두뇌는 두 가지 중 선택:
+
+   **A. Gemini (무료, 카드 불필요 — 기본값)**
+   - https://aistudio.google.com/apikey 에서 카드 없이 무료 키 발급
    ```
+   AI_PROVIDER=gemini
+   GEMINI_API_KEY=발급받은-키
+   GEMINI_MODEL=gemini-2.5-flash   # 선택
+   ```
+
+   **B. Anthropic Claude (유료, 고품질)**
+   ```
+   AI_PROVIDER=anthropic
    ANTHROPIC_API_KEY=sk-ant-...
-   ANTHROPIC_MODEL=claude-sonnet-5   # 선택. 고품질을 원하면 claude-opus-4-8
+   ANTHROPIC_MODEL=claude-sonnet-5   # 선택. 고품질은 claude-opus-4-8
    ```
 3. 서버 실행:
    ```bash
    npm start
    ```
 4. 브라우저에서 http://localhost:3000 접속 → 캐릭터 생성 후 모험 시작.
+
+> `.env`의 `AI_PROVIDER` 한 줄만 바꾸면 Gemini ↔ Claude를 오갈 수 있다. 규칙 엔진·UI·저장은 provider와 무관하게 동일하게 동작한다.
 
 ## 프로젝트 구조
 
@@ -38,7 +51,10 @@ server/
   index.js         Express + Socket.io 서버, 소켓 이벤트 라우팅
   gameSession.js   핵심 루프 오케스트레이션 (무브 판단 → 굴림 → 서사화)
   rulesEngine.js   주사위·판정·상태 변경 (결정론적 규칙 엔진)
-  aiGM.js          Claude API 프록시, Structured Outputs 스키마
+  aiGM.js          프롬프트/스키마 구성 + provider 디스패치
+  providers/
+    anthropicProvider.js  Claude 호출 (Structured Outputs)
+    geminiProvider.js     Gemini 호출 (responseSchema)
   dungeonWorld.js  클래스 프리셋(전사/마법사) + 무브 요약
   store.js         세션 저장/이어하기 (JSON 파일, data/)
 public/
