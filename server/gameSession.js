@@ -1,0 +1,176 @@
+'use strict';
+
+const { callGM } = require('./aiGM');
+const rules = require('./rulesEngine');
+const { createCharacter } = require('./dungeonWorld');
+const store = require('./store');
+
+/**
+ * 게임 세션 오케스트레이션.
+ * MVP의 심장: "AI가 무브 판단 → 코드가 2d6 굴림 → 결과를 AI가 서사화" 2-패스 루프.
+ *
+ * emit(event, payload)는 소켓으로 실시간 전달하는 콜백.
+ * 이벤트 종류: 'gmThinking', 'narration', 'dice', 'stateUpdate', 'systemLog', 'error'
+ */
+
+const MAX_HISTORY = 24; // API에 보내는 최근 메시지 수 (컨텍스트/토큰 관리)
+
+class GameSession {
+  constructor(data) {
+    // data: 저장본에서 복원하거나 null
+    this.character = data?.character || null;
+    this.messages = data?.messages || []; // Anthropic 형식 대화 이력
+    this.log = data?.log || []; // 화면 표시용 로그 [{kind, text}]
+    this.summary = data?.summary || ''; // 진행 상황 요약(현재는 최근 서사 기반)
+    this.busy = false;
+  }
+
+  hasCharacter() {
+    return !!this.character;
+  }
+
+  toJSON() {
+    return {
+      character: this.character,
+      messages: this.messages,
+      log: this.log,
+      summary: this.summary,
+    };
+  }
+
+  /** 화면 로그에 추가하고 이벤트로도 내보낸다. */
+  _pushLog(emit, kind, text, event = 'systemLog') {
+    const entry = { kind, text };
+    this.log.push(entry);
+    emit(event, entry);
+  }
+
+  _recentMessages() {
+    return this.messages.slice(-MAX_HISTORY);
+  }
+
+  /** 진행 요약을 최근 GM 서사로 갱신 (LLM 기억 한계를 코드가 보완). */
+  _updateSummary(narration) {
+    // 간단한 MVP 방식: 최근 서사 몇 개를 요약 슬롯에 유지.
+    this.summary = narration.slice(0, 400);
+  }
+
+  /** 캐릭터 생성 + AI GM 오프닝 장면. */
+  async createCharacter(emit, { name, classId }) {
+    this.character = createCharacter(name, classId);
+    this.messages = [];
+    this.log = [];
+    this.summary = '';
+
+    emit('stateUpdate', this.character);
+    this._pushLog(
+      emit,
+      'system',
+      `${this.character.name} (${this.character.className}) 의 모험이 시작됩니다.`
+    );
+
+    const kickoff = {
+      role: 'user',
+      content: `새로운 모험을 시작한다. 플레이어 캐릭터는 ${this.character.name}(${this.character.className})다. 흥미로운 첫 장면을 묘사하고, 플레이어가 바로 행동할 수 있는 상황을 제시하라. 첫 장면에는 판정이 필요 없다.`,
+    };
+    this.messages.push(kickoff);
+
+    await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
+    store.save(this.toJSON());
+  }
+
+  /** 플레이어 행동 처리 — 핵심 루프 진입점. */
+  async playerAction(emit, text) {
+    if (!this.character) {
+      emit('error', { message: '먼저 캐릭터를 생성하세요.' });
+      return;
+    }
+    const clean = String(text || '').trim();
+    if (!clean) return;
+
+    this._pushLog(emit, 'player', clean, 'narration');
+    this.messages.push({ role: 'user', content: clean });
+
+    await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: true });
+    store.save(this.toJSON());
+  }
+
+  /**
+   * GM 한 턴 실행. 필요 시 주사위 판정 → 2차 서사화까지 진행.
+   * @param {boolean} allowRollFollowup  roll 요청 시 판정+2차 서사를 수행할지
+   */
+  async _runGMTurn(emit, messages, { allowRollFollowup }) {
+    emit('gmThinking', { on: true });
+    let result;
+    try {
+      result = await callGM(this, messages);
+    } catch (e) {
+      emit('gmThinking', { on: false });
+      console.error('AI GM 호출 실패:', e);
+      emit('error', { message: 'AI GM 호출 실패: ' + e.message });
+      return;
+    }
+    emit('gmThinking', { on: false });
+
+    // 1차 서사 출력
+    if (result.narration) {
+      this._pushLog(emit, 'gm', result.narration, 'narration');
+      this.messages.push({ role: 'assistant', content: result.narration });
+      this._updateSummary(result.narration);
+    }
+
+    const action = result.action;
+
+    if (action.type === 'update_state') {
+      this._applyAndEmit(emit, action);
+      return;
+    }
+
+    if (action.type === 'roll' && allowRollFollowup) {
+      await this._resolveRoll(emit, action);
+      return;
+    }
+    // type === 'none' 또는 roll 미허용: 종료
+  }
+
+  /** 판정 요청을 코드가 굴리고, 결과를 다시 AI에 먹여 서사화한다. */
+  async _resolveRoll(emit, action) {
+    const roll = rules.resolveMove(action.stat, this.character);
+    const moveName = action.move || '판정';
+
+    // 주사위 결과를 로그에 구분 표시
+    this._pushLog(
+      emit,
+      'dice',
+      `${moveName} — ${rules.formatRoll(roll)}`,
+      'dice'
+    );
+
+    // 2차 패스: 판정 결과를 시스템 메시지로 AI에 전달 → 결과 서사 요청
+    const rollInfo =
+      `[시스템 판정 결과] 무브: ${moveName}, 능력치: ${roll.stat || '없음'}, ` +
+      `굴림: 2d6+(${roll.mod}) = [${roll.dice.join(',')}] = ${roll.total}, ` +
+      `구간: ${roll.tier} (${roll.tierLabel}). ` +
+      `이 결과에 맞는 서사를 만들어라. 피해/회복/아이템 변화가 있으면 action.type="update_state"로 요청하라. 추가 판정은 요청하지 마라(action.type은 update_state 또는 none).`;
+
+    this.messages.push({ role: 'user', content: rollInfo });
+
+    // 2차 서사는 추가 roll을 허용하지 않는다(무한 루프 방지).
+    await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
+  }
+
+  /** 상태 변경을 검증·반영하고 상태창 갱신 + 로그. */
+  _applyAndEmit(emit, action) {
+    const applied = rules.applyStateUpdate(this.character, action);
+    const changeText = rules.formatStateChange(applied);
+    emit('stateUpdate', this.character);
+    if (changeText) {
+      this._pushLog(emit, 'state', changeText, 'systemLog');
+    }
+    if (this.character.hp <= 0) {
+      this._pushLog(emit, 'system', '⚠️ HP가 0이 되었습니다. 위태로운 상황입니다...');
+    }
+  }
+}
+
+module.exports = { GameSession };

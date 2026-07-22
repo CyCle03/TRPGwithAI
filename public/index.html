@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI GM 던전 월드</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- 캐릭터 생성 화면 -->
+    <div id="setup" class="setup hidden">
+      <div class="setup-card">
+        <h1>🎲 AI GM 솔로 던전 월드</h1>
+        <p class="subtitle">AI가 GM을 맡는 1인용 판타지 모험 (MVP)</p>
+
+        <label>캐릭터 이름</label>
+        <input id="charName" type="text" placeholder="예: 아린" maxlength="40" />
+
+        <label>클래스 선택</label>
+        <div id="classList" class="class-list"></div>
+
+        <button id="startBtn" class="primary">모험 시작</button>
+      </div>
+    </div>
+
+    <!-- 게임 화면 -->
+    <div id="game" class="game hidden">
+      <main class="log-pane">
+        <header class="log-header">
+          <span>🎲 던전 월드</span>
+          <button id="newGameBtn" class="ghost" title="새 게임">새 게임</button>
+        </header>
+        <div id="log" class="log"></div>
+        <div id="thinking" class="thinking hidden">GM이 이야기를 짜는 중…</div>
+        <form id="inputForm" class="input-bar">
+          <input
+            id="actionInput"
+            type="text"
+            placeholder="행동을 서술하세요. 예: 고블린 뒤로 몰래 다가간다"
+            autocomplete="off"
+          />
+          <button type="submit" class="primary" id="sendBtn">전송</button>
+        </form>
+      </main>
+
+      <aside class="status-pane">
+        <h2 id="charTitle">캐릭터</h2>
+        <div class="hp-block">
+          <div class="hp-label">
+            HP <span id="hpText">–/–</span>
+          </div>
+          <div class="hp-bar-outer">
+            <div id="hpBar" class="hp-bar-inner"></div>
+          </div>
+          <div class="armor" id="armorText">방어구 0</div>
+        </div>
+
+        <h3>능력치</h3>
+        <div id="stats" class="stats-grid"></div>
+
+        <h3>인벤토리</h3>
+        <ul id="inventory" class="inventory"></ul>
+
+        <div class="model-note" id="modelNote"></div>
+      </aside>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

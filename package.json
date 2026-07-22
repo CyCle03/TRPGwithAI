@@ -1,0 +1,17 @@
+{
+  "name": "ai-gm-dungeon-world",
+  "version": "0.1.0",
+  "description": "AI GM 솔로 던전 월드 (MVP) - AI가 GM을 맡는 1인용 PbtA 웹 도구",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.5",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.0"
+  }
+}
