@@ -43,9 +43,11 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 32px;
+  padding: 28px;
   width: 100%;
-  max-width: 480px;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 .setup-card h1 {
@@ -78,14 +80,15 @@ input[type='text']:focus {
 }
 .class-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
 }
 .class-card {
   text-align: left;
   background: var(--panel-2);
   border: 2px solid var(--border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   cursor: pointer;
   color: var(--text);
   transition: border-color 0.15s;
@@ -98,17 +101,19 @@ input[type='text']:focus {
 }
 .class-card .cname {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 .class-card .cdesc {
   color: var(--muted);
-  font-size: 0.85rem;
-  margin: 4px 0 6px;
+  font-size: 0.8rem;
+  margin: 3px 0 5px;
+  line-height: 1.4;
 }
 .class-card .cstats {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--accent);
   font-family: ui-monospace, monospace;
+  line-height: 1.4;
 }
 /* 위저드 스텝 */
 .steps {

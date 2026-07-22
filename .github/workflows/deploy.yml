@@ -1,0 +1,28 @@
+name: Deploy to server
+
+# main 브랜치에 push되면 서버의 셀프호스티드 러너가 자동 배포한다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # 수동 실행도 허용
+
+# 동시 배포 방지 (이전 실행 취소)
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # 이 저장소 전용 러너(label: trpg)에서만 실행 — 다른 러너와 격리
+    runs-on: [self-hosted, trpg]
+    steps:
+      - name: Pull latest & restart service
+        run: |
+          set -e
+          cd ~/trpg-with-ai
+          git fetch --all --prune
+          git reset --hard origin/main
+          npm ci --omit=dev
+          sudo systemctl restart trpg-with-ai
+          sleep 2
+          curl -sf http://localhost:3100/api/health && echo "\n배포 성공"
