@@ -9,39 +9,132 @@ const { Server } = require('socket.io');
 
 const { GameSession } = require('./gameSession');
 const { listClasses, STANDARD_ARRAY, STAT_KEYS } = require('./dungeonWorld');
-const { MODEL, PROVIDER } = require('./aiGM');
+const aiGM = require('./aiGM');
+const auth = require('./auth');
 const store = require('./store');
 
 const PORT = process.env.PORT || 3000;
-
-// provider에 맞는 API 키가 있는지 확인
-const KEY_ENV = PROVIDER === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
-const hasKey = !!process.env[KEY_ENV];
-if (!hasKey) {
-  console.warn(
-    `\n⚠️  ${KEY_ENV} 가 설정되지 않았습니다. .env 파일에 키를 넣어야 AI GM이 동작합니다.\n`
-  );
-}
-
-// MVP: 단일 세션(솔로 전용). 서버 시작 시 저장본 복원.
-const session = new GameSession(store.load());
+const IS_PROD = process.env.NODE_ENV === 'production';
+const COOKIE = 'trpg_token';
 
 const app = express();
+app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// ---------- 쿠키 유틸 ----------
+function parseCookies(header) {
+  const out = {};
+  (header || '').split(';').forEach((p) => {
+    const i = p.indexOf('=');
+    if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+function setAuthCookie(res, token) {
+  const parts = [
+    `${COOKIE}=${token}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    `Max-Age=${60 * 60 * 24 * 30}`,
+  ];
+  if (IS_PROD) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
+function clearAuthCookie(res) {
+  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+}
+function userIdFromReq(req) {
+  return auth.verifyToken(parseCookies(req.headers.cookie)[COOKIE]);
+}
 
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, provider: PROVIDER, model: MODEL, hasKey });
+// ---------- 인증 API ----------
+app.post('/api/signup', (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    const user = auth.createUser(username, password);
+    setAuthCookie(res, auth.signToken(user.id));
+    res.json({ user });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
-io.on('connection', (socket) => {
-  const emit = (event, payload) => socket.emit(event, payload);
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  const user = auth.verifyLogin(username, password);
+  if (!user) return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+  setAuthCookie(res, auth.signToken(user.id));
+  res.json({ user });
+});
 
-  // 접속 시 현재 상태 스냅샷 전달 (이어하기)
+app.post('/api/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  const uid = userIdFromReq(req);
+  res.json({ user: uid ? auth.getUserById(uid) : null });
+});
+
+app.post('/api/settings', (req, res) => {
+  const uid = userIdFromReq(req);
+  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  try {
+    const { provider, model, apiKey } = req.body || {};
+    const user = auth.updateSettings(uid, { provider, model, apiKey });
+    res.json({ user });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true });
+});
+
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ---------- 소켓 인증 ----------
+io.use((socket, next) => {
+  const uid = auth.verifyToken(parseCookies(socket.request.headers.cookie)[COOKIE]);
+  if (!uid) return next(new Error('unauthorized'));
+  socket.userId = uid;
+  next();
+});
+
+// 사용자별 세션 캐시 (메모리)
+const sessions = new Map();
+function getSession(userId) {
+  if (!sessions.has(userId)) sessions.set(userId, new GameSession(userId, store.load(userId)));
+  return sessions.get(userId);
+}
+
+io.on('connection', (socket) => {
+  const userId = socket.userId;
+  const session = getSession(userId);
+  const emit = (event, payload) => socket.emit(event, payload);
+  const user = auth.getUserById(userId);
+
+  // AI 액션 전에 최신 설정 주입 + 키 확인
+  function ensureAi() {
+    session.setAiConfig(auth.getAiConfig(userId));
+    if (!session.aiConfig || !session.aiConfig.apiKey) {
+      emit('error', { message: 'AI API 키가 없습니다. 우측 상단 ⚙ 설정에서 본인 키를 등록하세요.' });
+      return false;
+    }
+    return true;
+  }
+
   socket.emit('init', {
-    model: MODEL,
+    username: user ? user.username : null,
+    settings: user ? user.settings : null,
+    defaultModels: {
+      gemini: aiGM.defaultModel('gemini'),
+      anthropic: aiGM.defaultModel('anthropic'),
+    },
     classes: listClasses(),
     statKeys: STAT_KEYS,
     standardArray: STANDARD_ARRAY,
@@ -51,11 +144,11 @@ io.on('connection', (socket) => {
     enemies: session.enemies,
     companions: session.companions,
   });
-  // 저장된 레벨업 선택이 대기 중이면 다시 띄운다
   if (session.pendingLevelUp) socket.emit('levelUp', session.pendingLevelUp);
 
   socket.on('createCharacter', async (payload) => {
     if (session.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });
+    if (!ensureAi()) return;
     session.busy = true;
     try {
       await session.createCharacter(emit, payload || {});
@@ -69,6 +162,7 @@ io.on('connection', (socket) => {
 
   socket.on('playerAction', async (payload) => {
     if (session.busy) return emit('error', { message: 'GM이 아직 응답 중입니다.' });
+    if (!ensureAi()) return;
     session.busy = true;
     try {
       await session.playerAction(emit, payload?.text);
@@ -82,6 +176,7 @@ io.on('connection', (socket) => {
 
   socket.on('suggestActions', async () => {
     if (session.busy) return;
+    if (!ensureAi()) return;
     session.busy = true;
     try {
       await session.suggestActions(emit);
@@ -102,9 +197,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 새 게임(저장본 삭제 후 초기화)
   socket.on('resetGame', () => {
-    store.clear();
+    store.clear(userId);
     session.character = null;
     session.messages = [];
     session.log = [];
@@ -118,5 +212,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`\n🎲 AI GM 던전 월드 실행 중: http://localhost:${PORT}`);
-  console.log(`   provider: ${PROVIDER} / 모델: ${MODEL}\n`);
+  console.log(`   계정 기반 · 사용자별 API 키\n`);
 });

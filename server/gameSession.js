@@ -22,7 +22,8 @@ const store = require('./store');
 const MAX_HISTORY = 24; // API에 보내는 최근 메시지 수 (컨텍스트/토큰 관리)
 
 class GameSession {
-  constructor(data) {
+  constructor(userId, data) {
+    this.userId = userId;
     // data: 저장본에서 복원하거나 null
     this.character = ensureCharacterFields(data?.character || null);
     this.messages = data?.messages || []; // Anthropic 형식 대화 이력
@@ -31,7 +32,13 @@ class GameSession {
     this.pendingLevelUp = data?.pendingLevelUp || null; // 레벨업 선택 대기 옵션
     this.enemies = data?.enemies || []; // 현재 장면의 적 NPC
     this.companions = data?.companions || []; // 현재 장면의 동료 NPC
+    this.aiConfig = null; // 런타임 전용: {provider, model, apiKey} — 저장 안 함(보안)
     this.busy = false;
+  }
+
+  /** 사용자 AI 설정 주입 (매 요청 전 최신값으로 갱신). */
+  setAiConfig(cfg) {
+    this.aiConfig = cfg;
   }
 
   hasCharacter() {
@@ -93,7 +100,7 @@ class GameSession {
     this.messages.push(kickoff);
 
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
-    store.save(this.toJSON());
+    store.save(this.userId, this.toJSON());
   }
 
   /** 플레이어 행동 처리 — 핵심 루프 진입점. */
@@ -115,7 +122,7 @@ class GameSession {
 
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: true });
     this._checkLevelUp(emit);
-    store.save(this.toJSON());
+    store.save(this.userId, this.toJSON());
   }
 
   /** 현재 상황에서 취할 만한 행동 몇 가지를 AI에게 받아 제안한다(이야기 진행 안 함). */
@@ -165,7 +172,7 @@ class GameSession {
     emit('levelUpDone', {});
     // 남은 XP로 연속 레벨업이 가능하면 다시 띄운다.
     this._checkLevelUp(emit);
-    store.save(this.toJSON());
+    store.save(this.userId, this.toJSON());
   }
 
   /**

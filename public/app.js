@@ -1,7 +1,7 @@
 /* global io */
 'use strict';
 
-const socket = io();
+let socket = null; // 로그인 후 연결
 
 // DOM
 const setupEl = document.getElementById('setup');
@@ -53,6 +53,33 @@ const luStats = document.getElementById('luStats');
 const luMoves = document.getElementById('luMoves');
 const luConfirm = document.getElementById('luConfirm');
 
+// 인증 / 사용자 바 / 설정
+const authEl = document.getElementById('auth');
+const authUserEl = document.getElementById('authUser');
+const authPassEl = document.getElementById('authPass');
+const authErrorEl = document.getElementById('authError');
+const authSubmitEl = document.getElementById('authSubmit');
+const authSwitchEl = document.getElementById('authSwitch');
+const authSubtitleEl = document.getElementById('authSubtitle');
+const authToggleTextEl = document.getElementById('authToggleText');
+const userBarEl = document.getElementById('userBar');
+const userNameEl = document.getElementById('userName');
+const settingsBtn = document.getElementById('settingsBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const settingsModal = document.getElementById('settingsModal');
+const setProviderEl = document.getElementById('setProvider');
+const setModelEl = document.getElementById('setModel');
+const setKeyEl = document.getElementById('setKey');
+const keyStatusEl = document.getElementById('keyStatus');
+const keyHelpEl = document.getElementById('keyHelp');
+const settingsErrorEl = document.getElementById('settingsError');
+const settingsSaveBtn = document.getElementById('settingsSave');
+const settingsCancelBtn = document.getElementById('settingsCancel');
+
+let authMode = 'login'; // 'login' | 'signup'
+let mySettings = null; // {provider, model, hasApiKey}
+let defaultModels = { gemini: '', anthropic: '' };
+
 // 위저드 상태
 let classesData = [];
 let statKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -70,80 +97,90 @@ let luMove = null; // 선택한 무브 id
 let luNeedStat = false;
 let luNeedMove = false;
 
-// ---------- 초기화 ----------
-socket.on('init', (data) => {
-  modelNote.textContent = `모델: ${data.model}`;
-  classesData = data.classes || [];
-  if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
-  if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
-  renderClasses(classesData);
-  if (data.hasCharacter) {
-    showGame();
-    if (data.character) updateStatus(data.character);
-    renderField(data.enemies, data.companions);
+// ---------- 소켓 핸들러 (로그인 후 연결) ----------
+function wireSocket() {
+  socket.on('init', (data) => {
+    mySettings = data.settings || { provider: 'gemini', model: '', hasApiKey: false };
+    defaultModels = data.defaultModels || defaultModels;
+    if (data.username) userNameEl.textContent = data.username;
+    userBarEl.classList.remove('hidden');
+    updateModelNote();
+    classesData = data.classes || [];
+    if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
+    if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
+    renderClasses(classesData);
+    if (data.hasCharacter) {
+      showGame();
+      if (data.character) updateStatus(data.character);
+      renderField(data.enemies, data.companions);
+      logInnerEl.innerHTML = '';
+      (data.log || []).forEach(renderLogEntry);
+      scrollLog();
+    } else {
+      resetWizard();
+      showSetup();
+    }
+    // API 키가 없으면 설정을 먼저 열어 안내
+    if (!mySettings.hasApiKey) openSettings(true);
+  });
+
+  socket.on('reset', () => {
+    prevHp = null;
     logInnerEl.innerHTML = '';
-    (data.log || []).forEach(renderLogEntry);
-    scrollLog();
-  } else {
+    renderField([], []);
+    closeLevelUp();
+    clearSuggestions();
     resetWizard();
     showSetup();
-  }
-});
+  });
 
-socket.on('reset', () => {
-  prevHp = null;
-  logInnerEl.innerHTML = '';
-  renderField([], []);
-  closeLevelUp();
-  clearSuggestions();
-  resetWizard();
-  showSetup();
-});
+  socket.on('narration', (entry) => {
+    renderLogEntry(entry);
+    scrollLog();
+  });
+  socket.on('dice', (entry) => animateDiceRoll(entry));
+  socket.on('systemLog', (entry) => {
+    renderLogEntry(entry);
+    scrollLog();
+  });
+  socket.on('stateUpdate', (character) => updateStatus(character));
+  socket.on('fieldUpdate', ({ enemies, companions }) => renderField(enemies, companions));
+  socket.on('gmThinking', ({ on }) => {
+    thinkingEl.classList.toggle('hidden', !on);
+    setBusy(on);
+  });
+  socket.on('levelUp', (options) => openLevelUp(options));
+  socket.on('levelUpDone', () => closeLevelUp());
+  socket.on('suggestions', ({ items }) => renderSuggestions(items || []));
+  socket.on('error', ({ message }) => {
+    renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
+    scrollLog();
+    setBusy(false);
+    thinkingEl.classList.add('hidden');
+  });
+}
 
-// ---------- 스트리밍 이벤트 ----------
-socket.on('narration', (entry) => {
-  renderLogEntry(entry);
-  scrollLog();
-});
-socket.on('dice', (entry) => {
-  animateDiceRoll(entry);
-});
-socket.on('systemLog', (entry) => {
-  renderLogEntry(entry);
-  scrollLog();
-});
-socket.on('stateUpdate', (character) => {
-  updateStatus(character);
-});
-socket.on('fieldUpdate', ({ enemies, companions }) => {
-  renderField(enemies, companions);
-});
-socket.on('gmThinking', ({ on }) => {
-  thinkingEl.classList.toggle('hidden', !on);
-  setBusy(on);
-});
-socket.on('levelUp', (options) => {
-  openLevelUp(options);
-});
-socket.on('levelUpDone', () => {
-  closeLevelUp();
-});
-socket.on('suggestions', ({ items }) => {
-  renderSuggestions(items || []);
-});
-socket.on('error', ({ message }) => {
-  renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
-  scrollLog();
-  setBusy(false);
-  thinkingEl.classList.add('hidden');
-});
+function updateModelNote() {
+  if (!mySettings) return;
+  const model = mySettings.model || defaultModels[mySettings.provider] || '기본';
+  const pname = mySettings.provider === 'anthropic' ? 'Claude' : 'Gemini';
+  modelNote.textContent = `${pname} · ${model}${mySettings.hasApiKey ? '' : ' · ⚠ 키 미등록'}`;
+}
 
 // ---------- 화면 전환 ----------
+function showAuth() {
+  authEl.classList.remove('hidden');
+  setupEl.classList.add('hidden');
+  gameEl.classList.add('hidden');
+  userBarEl.classList.add('hidden');
+}
 function showSetup() {
+  authEl.classList.add('hidden');
   setupEl.classList.remove('hidden');
   gameEl.classList.add('hidden');
 }
 function showGame() {
+  authEl.classList.add('hidden');
   setupEl.classList.add('hidden');
   gameEl.classList.remove('hidden');
 }
@@ -691,3 +728,149 @@ luConfirm.addEventListener('click', () => {
   luConfirm.disabled = true;
   socket.emit('levelUpChoice', { ability: luAbility, moveId: luMove });
 });
+
+// ================= 인증 / 설정 =================
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '요청 실패');
+  return data;
+}
+
+function connectAndStart() {
+  if (socket) {
+    socket.connect();
+    return;
+  }
+  socket = io();
+  wireSocket();
+}
+
+// --- 로그인/회원가입 ---
+function setAuthMode(mode) {
+  authMode = mode;
+  authErrorEl.classList.add('hidden');
+  if (mode === 'login') {
+    authSubtitleEl.textContent = '로그인하고 모험을 시작하세요';
+    authSubmitEl.textContent = '로그인';
+    authToggleTextEl.textContent = '계정이 없나요?';
+    authSwitchEl.textContent = '회원가입';
+    authPassEl.setAttribute('autocomplete', 'current-password');
+  } else {
+    authSubtitleEl.textContent = '새 계정을 만들어 시작하세요';
+    authSubmitEl.textContent = '회원가입';
+    authToggleTextEl.textContent = '이미 계정이 있나요?';
+    authSwitchEl.textContent = '로그인';
+    authPassEl.setAttribute('autocomplete', 'new-password');
+  }
+}
+
+authSwitchEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  setAuthMode(authMode === 'login' ? 'signup' : 'login');
+});
+
+async function submitAuth() {
+  const username = authUserEl.value.trim();
+  const password = authPassEl.value;
+  if (!username || !password) return;
+  authSubmitEl.disabled = true;
+  authErrorEl.classList.add('hidden');
+  try {
+    await api(authMode === 'signup' ? '/api/signup' : '/api/login', { username, password });
+    authPassEl.value = '';
+    connectAndStart();
+  } catch (e) {
+    authErrorEl.textContent = e.message;
+    authErrorEl.classList.remove('hidden');
+  } finally {
+    authSubmitEl.disabled = false;
+  }
+}
+authSubmitEl.addEventListener('click', submitAuth);
+authPassEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitAuth();
+});
+
+// --- 로그아웃 ---
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await api('/api/logout', {});
+  } catch (_) {}
+  if (socket) socket.disconnect();
+  userBarEl.classList.add('hidden');
+  authUserEl.value = '';
+  setAuthMode('login');
+  showAuth();
+});
+
+// --- 설정 모달 ---
+function openSettings(firstTime) {
+  settingsErrorEl.classList.add('hidden');
+  if (mySettings) {
+    setProviderEl.value = mySettings.provider || 'gemini';
+    setModelEl.value = mySettings.model || '';
+  }
+  setKeyEl.value = '';
+  updateSettingsHints();
+  settingsModal.classList.remove('hidden');
+  if (firstTime) {
+    settingsErrorEl.textContent = '먼저 AI API 키를 등록해야 게임을 시작할 수 있어요.';
+    settingsErrorEl.classList.remove('hidden');
+  }
+}
+function closeSettings() {
+  settingsModal.classList.add('hidden');
+}
+function updateSettingsHints() {
+  const prov = setProviderEl.value;
+  setModelEl.placeholder = defaultModels[prov] || '기본값';
+  keyStatusEl.textContent = mySettings && mySettings.hasApiKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
+  keyHelpEl.innerHTML =
+    prov === 'gemini'
+      ? '무료 키 발급: <b>aistudio.google.com/apikey</b> (카드 불필요)'
+      : '유료 키 발급: <b>console.anthropic.com</b>';
+}
+setProviderEl.addEventListener('change', updateSettingsHints);
+settingsBtn.addEventListener('click', () => openSettings(false));
+settingsCancelBtn.addEventListener('click', closeSettings);
+
+settingsSaveBtn.addEventListener('click', async () => {
+  settingsSaveBtn.disabled = true;
+  settingsErrorEl.classList.add('hidden');
+  try {
+    const body = { provider: setProviderEl.value, model: setModelEl.value.trim() };
+    if (setKeyEl.value.trim()) body.apiKey = setKeyEl.value.trim();
+    const data = await api('/api/settings', body);
+    mySettings = data.user.settings;
+    setKeyEl.value = '';
+    updateModelNote();
+    closeSettings();
+  } catch (e) {
+    settingsErrorEl.textContent = e.message;
+    settingsErrorEl.classList.remove('hidden');
+  } finally {
+    settingsSaveBtn.disabled = false;
+  }
+});
+
+// --- 부트 ---
+(async function boot() {
+  try {
+    const { user } = await api('/api/me');
+    if (user) {
+      mySettings = user.settings;
+      connectAndStart();
+    } else {
+      setAuthMode('login');
+      showAuth();
+    }
+  } catch (_) {
+    setAuthMode('login');
+    showAuth();
+  }
+})();

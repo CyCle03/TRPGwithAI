@@ -7,7 +7,32 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- 캐릭터 생성 화면 (시트 만들기 3단계) -->
+    <!-- 우측 상단 사용자 바 (로그인 후) -->
+    <div id="userBar" class="user-bar hidden">
+      <span id="userName"></span>
+      <button id="settingsBtn" class="ghost" title="설정">⚙ 설정</button>
+      <button id="logoutBtn" class="ghost">로그아웃</button>
+    </div>
+
+    <!-- 로그인 / 회원가입 -->
+    <div id="auth" class="setup hidden">
+      <div class="setup-card auth-card">
+        <h1>🎲 AI GM 솔로 던전 월드</h1>
+        <p class="subtitle" id="authSubtitle">로그인하고 모험을 시작하세요</p>
+        <label>아이디</label>
+        <input id="authUser" type="text" placeholder="영문/숫자/밑줄 3~20자" maxlength="20" autocomplete="username" />
+        <label>비밀번호</label>
+        <input id="authPass" type="password" placeholder="6자 이상" autocomplete="current-password" />
+        <div id="authError" class="auth-error hidden"></div>
+        <button id="authSubmit" class="primary">로그인</button>
+        <p class="auth-toggle">
+          <span id="authToggleText">계정이 없나요?</span>
+          <a id="authSwitch" href="#">회원가입</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- 캐릭터 생성 화면 (시트 만들기 4단계) -->
     <div id="setup" class="setup hidden">
       <div class="setup-card">
         <h1>🎲 AI GM 솔로 던전 월드</h1>
@@ -150,6 +175,35 @@
         <div id="luMoves" class="lu-moves"></div>
 
         <button id="luConfirm" class="primary" disabled>선택 확정</button>
+      </div>
+    </div>
+
+    <!-- 설정 모달 (AI 제공자/모델/API 키) -->
+    <div id="settingsModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h2>⚙ 설정</h2>
+        <p class="modal-sub">
+          AI 모델과 <b>본인 API 키</b>를 등록하세요. 키는 암호화되어 저장되며, 다른 사용자에게 노출되지 않습니다.
+        </p>
+
+        <label>AI 제공자</label>
+        <select id="setProvider">
+          <option value="gemini">Google Gemini (무료 등급 가능)</option>
+          <option value="anthropic">Anthropic Claude (유료)</option>
+        </select>
+
+        <label>모델 <span class="opt">(비우면 기본값 사용)</span></label>
+        <input id="setModel" type="text" placeholder="기본값" autocomplete="off" />
+
+        <label>API 키 <span class="opt" id="keyStatus"></span></label>
+        <input id="setKey" type="password" placeholder="키를 붙여넣기 (변경할 때만 입력)" autocomplete="off" />
+        <p class="hint" id="keyHelp"></p>
+
+        <div id="settingsError" class="auth-error hidden"></div>
+        <div class="wizard-nav">
+          <button id="settingsCancel" class="ghost">닫기</button>
+          <button id="settingsSave" class="primary">저장</button>
+        </div>
       </div>
     </div>
 

@@ -7,12 +7,14 @@ const Anthropic = require('@anthropic-ai/sdk');
  * Structured Outputs(JSON 스키마)로 { narration, action } JSON 텍스트를 반환한다.
  */
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+const DEFAULT_MODEL = 'claude-sonnet-5';
 
-let client = null;
-function getClient() {
-  if (!client) client = new Anthropic(); // ANTHROPIC_API_KEY 자동 사용
-  return client;
+// apiKey별 클라이언트 캐시 (사용자마다 다른 키)
+const clients = new Map();
+function getClient(apiKey) {
+  if (!apiKey) throw new Error('Claude API 키가 없습니다. 설정에서 본인 키를 등록하세요.');
+  if (!clients.has(apiKey)) clients.set(apiKey, new Anthropic({ apiKey }));
+  return clients.get(apiKey);
 }
 
 // NPC(적/동료) 항목 스키마 — 이름 + 상태(체력 서술) + 특징.
@@ -64,9 +66,9 @@ const SCHEMA = {
  * @param {Array}  p.messages      [{role:'user'|'assistant', content:string}]
  * @returns {Promise<string>} JSON 텍스트
  */
-async function generate({ staticSystem, dynamicSystem, messages }) {
-  const resp = await getClient().messages.create({
-    model: MODEL,
+async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient(apiKey).messages.create({
+    model: model || DEFAULT_MODEL,
     max_tokens: 1024,
     thinking: { type: 'disabled' },
     system: [
@@ -91,9 +93,9 @@ const SUGGEST_SCHEMA = {
   },
 };
 
-async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
-  const resp = await getClient().messages.create({
-    model: MODEL,
+async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient(apiKey).messages.create({
+    model: model || DEFAULT_MODEL,
     max_tokens: 512,
     thinking: { type: 'disabled' },
     system: [
@@ -110,4 +112,4 @@ async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
   return JSON.stringify(obj.suggestions || []);
 }
 
-module.exports = { generate, generateSuggestions, MODEL, name: 'anthropic' };
+module.exports = { generate, generateSuggestions, DEFAULT_MODEL, name: 'anthropic' };

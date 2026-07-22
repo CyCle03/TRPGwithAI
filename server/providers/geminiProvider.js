@@ -8,16 +8,14 @@ const { GoogleGenAI, Type } = require('@google/genai');
  * Gemini 스키마는 nullable/propertyOrdering 등 자체 형식을 쓴다(Anthropic과 다름).
  */
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+const DEFAULT_MODEL = 'gemini-flash-lite-latest';
 
-let client = null;
-function getClient() {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY 가 설정되지 않았습니다 (.env 확인).');
-    client = new GoogleGenAI({ apiKey });
-  }
-  return client;
+// apiKey별 클라이언트 캐시 (사용자마다 다른 키)
+const clients = new Map();
+function getClient(apiKey) {
+  if (!apiKey) throw new Error('Gemini API 키가 없습니다. 설정에서 본인 키를 등록하세요.');
+  if (!clients.has(apiKey)) clients.set(apiKey, new GoogleGenAI({ apiKey }));
+  return clients.get(apiKey);
 }
 
 // NPC(적/동료) 항목 스키마
@@ -86,9 +84,9 @@ function toGeminiContents(messages) {
  * @param {Array}  p.messages
  * @returns {Promise<string>} JSON 텍스트
  */
-async function generate({ staticSystem, dynamicSystem, messages }) {
-  const resp = await getClient().models.generateContent({
-    model: MODEL,
+async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient(apiKey).models.generateContent({
+    model: model || DEFAULT_MODEL,
     contents: toGeminiContents(messages),
     config: {
       systemInstruction: `${staticSystem}\n\n${dynamicSystem}`,
@@ -105,9 +103,9 @@ async function generate({ staticSystem, dynamicSystem, messages }) {
 // 행동 제안: 문자열 배열을 최상위 스키마로 반환
 const SUGGEST_SCHEMA = { type: Type.ARRAY, items: { type: Type.STRING } };
 
-async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
-  const resp = await getClient().models.generateContent({
-    model: MODEL,
+async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem, messages }) {
+  const resp = await getClient(apiKey).models.generateContent({
+    model: model || DEFAULT_MODEL,
     contents: toGeminiContents(messages),
     config: {
       systemInstruction: `${staticSystem}\n\n${dynamicSystem}`,
@@ -120,4 +118,4 @@ async function generateSuggestions({ staticSystem, dynamicSystem, messages }) {
   return text;
 }
 
-module.exports = { generate, generateSuggestions, MODEL, name: 'gemini' };
+module.exports = { generate, generateSuggestions, DEFAULT_MODEL, name: 'gemini' };

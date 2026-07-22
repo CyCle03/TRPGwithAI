@@ -9,23 +9,20 @@ const { ABILITIES } = require('./rulesEngine');
  * .env의 AI_PROVIDER 로 anthropic(Claude) / gemini(무료) 를 토글한다.
  */
 
-const PROVIDER_NAME = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
+// 사용자별 provider 선택 (세션의 aiConfig 사용)
+const PROVIDERS = {
+  gemini: require('./providers/geminiProvider'),
+  anthropic: require('./providers/anthropicProvider'),
+};
 
-function loadProvider() {
-  switch (PROVIDER_NAME) {
-    case 'anthropic':
-    case 'claude':
-      return require('./providers/anthropicProvider');
-    case 'gemini':
-    case 'google':
-      return require('./providers/geminiProvider');
-    default:
-      throw new Error(`알 수 없는 AI_PROVIDER: ${PROVIDER_NAME} (anthropic | gemini)`);
-  }
+function pickProvider(name) {
+  return PROVIDERS[name] || PROVIDERS.gemini;
 }
 
-const provider = loadProvider();
-const MODEL = provider.MODEL;
+/** provider별 기본 모델 (설정 UI 표시용). */
+function defaultModel(name) {
+  return (PROVIDERS[name] || PROVIDERS.gemini).DEFAULT_MODEL;
+}
 
 // 정적 규칙/역할 지시 (매 턴 동일 — Claude에서는 프롬프트 캐시 대상).
 const STATIC_SYSTEM = `너는 1인용 던전 월드(PbtA) 게임의 게임 마스터(GM)다. 플레이어 한 명과 함께 짧은 판타지 모험을 진행한다.
@@ -102,7 +99,10 @@ function fmtNpcs(list) {
  * @param {Array}  messages
  */
 async function callGM(session, messages) {
-  const jsonText = await provider.generate({
+  const cfg = session.aiConfig || {};
+  const jsonText = await pickProvider(cfg.provider).generate({
+    apiKey: cfg.apiKey,
+    model: cfg.model,
     staticSystem: STATIC_SYSTEM,
     dynamicSystem: buildStateSummary(session),
     messages,
@@ -129,7 +129,10 @@ JSON 문자열 배열로만 출력하라.`;
  * @returns {Promise<string[]>}
  */
 async function suggestGmActions(session, messages) {
-  const jsonText = await provider.generateSuggestions({
+  const cfg = session.aiConfig || {};
+  const jsonText = await pickProvider(cfg.provider).generateSuggestions({
+    apiKey: cfg.apiKey,
+    model: cfg.model,
     staticSystem: SUGGEST_SYSTEM,
     dynamicSystem: buildStateSummary(session),
     messages,
@@ -181,4 +184,4 @@ function normalize(parsed) {
   };
 }
 
-module.exports = { callGM, suggestGmActions, MODEL, PROVIDER: provider.name };
+module.exports = { callGM, suggestGmActions, defaultModel };
