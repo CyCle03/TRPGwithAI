@@ -34,7 +34,13 @@ class GameSession {
     this.companions = data?.companions || []; // 현재 장면의 동료 NPC
     this.aiConfig = null; // 런타임 전용: {provider, model, apiKey} — 저장 안 함(보안)
     this.busy = false;
+    // 보너스 XP 남발 방지용 (저장 안 함)
+    this._turnCount = 0;
+    this._lastBonusTurn = -99;
+    this._missThisTurn = false;
   }
+
+  static BONUS_XP_COOLDOWN = 5; // 성취 보너스 XP 최소 간격(턴)
 
   /** 사용자 AI 설정 주입 (매 요청 전 최신값으로 갱신). */
   setAiConfig(cfg) {
@@ -120,6 +126,9 @@ class GameSession {
     this._pushLog(emit, 'player', clean, 'narration');
     this.messages.push({ role: 'user', content: clean });
 
+    this._turnCount += 1;
+    this._missThisTurn = false;
+
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: true });
     this._checkLevelUp(emit);
     store.save(this.userId, this.toJSON());
@@ -204,8 +213,14 @@ class GameSession {
     // 적/동료 목록 변화 반영 (모든 응답 유형에서 가능)
     this._applyFieldUpdate(emit, action);
 
-    // GM이 성취 보너스 경험치를 줬으면 반영
-    if (action.xpGain && action.xpGain > 0) {
+    // GM 성취 보너스 XP — 실패 턴엔 금지 + 최소 간격(쿨다운)으로 남발 방지
+    if (
+      action.xpGain &&
+      action.xpGain > 0 &&
+      !this._missThisTurn &&
+      this._turnCount - this._lastBonusTurn >= GameSession.BONUS_XP_COOLDOWN
+    ) {
+      this._lastBonusTurn = this._turnCount;
       this.character.xp += action.xpGain;
       emit('stateUpdate', this.character);
       this._pushLog(emit, 'state', `✨ 경험치 +${action.xpGain} (성취)`);
@@ -244,17 +259,18 @@ class GameSession {
     const roll = rules.resolveMove(action.stat, this.character);
     const moveName = action.move || '판정';
 
-    // 주사위 결과를 로그에 구분 표시 (tier 포함 → 클라 애니메이션/색상)
+    // 주사위 결과를 로그에 구분 표시 (tier/주사위눈 포함 → 클라 애니메이션)
     this._pushLog(
       emit,
       'dice',
       `${moveName} — ${rules.formatRoll(roll)}`,
       'dice',
-      { tier: roll.tier }
+      { tier: roll.tier, dice: roll.dice }
     );
 
     // 던전 월드: 6- 실패에서 경험치 획득 ("실패에서 배운다")
     if (roll.tier === 'miss') {
+      this._missThisTurn = true; // 이 턴엔 보너스 XP 금지(중복 방지)
       this.character.xp += 1;
       emit('stateUpdate', this.character);
       this._pushLog(emit, 'state', '✨ 경험치 +1 (실패에서 배운다)');

@@ -73,14 +73,24 @@ function formatRoll(result) {
  * @returns {object} 실제 적용된 변경 요약 (로그용)
  */
 function applyStateUpdate(character, action) {
-  const applied = { hpDelta: 0, added: [], removed: [] };
+  const applied = { hpDelta: 0, added: [], removed: [], rawDamage: null, armorBlocked: 0 };
 
-  // HP 변경 (음수=피해, 양수=회복). 0..maxHp 범위로 클램프.
+  // HP 변경. 피해(음수)는 방어구만큼 자동 차감(던전 월드 규칙), 회복(양수)은 그대로.
   if (typeof action.hpDelta === 'number' && action.hpDelta !== 0) {
     const before = character.hp;
-    const after = clamp(character.hp + action.hpDelta, 0, character.maxHp);
-    character.hp = after;
-    applied.hpDelta = after - before;
+    if (action.hpDelta < 0) {
+      const raw = -action.hpDelta; // 방어구 적용 전 원피해
+      const armor = character.armor || 0;
+      const blocked = Math.min(raw, armor);
+      const dealt = raw - blocked; // max(0, raw - armor)
+      character.hp = clamp(character.hp - dealt, 0, character.maxHp);
+      applied.hpDelta = character.hp - before; // 음수 또는 0
+      applied.rawDamage = raw;
+      applied.armorBlocked = blocked;
+    } else {
+      character.hp = clamp(character.hp + action.hpDelta, 0, character.maxHp);
+      applied.hpDelta = character.hp - before;
+    }
   }
 
   // 아이템 획득
@@ -115,8 +125,16 @@ function applyStateUpdate(character, action) {
 /** 적용된 상태 변경을 사람이 읽을 로그 문자열로. 변경 없으면 null. */
 function formatStateChange(applied) {
   const parts = [];
-  if (applied.hpDelta < 0) parts.push(`HP ${applied.hpDelta}`);
-  if (applied.hpDelta > 0) parts.push(`HP +${applied.hpDelta}`);
+  if (applied.rawDamage != null) {
+    // 피해: 방어구 차감 계산을 투명하게 표시
+    if (applied.hpDelta < 0) {
+      parts.push(`HP ${applied.hpDelta} (피해 ${applied.rawDamage} − 방어구 ${applied.armorBlocked})`);
+    } else {
+      parts.push(`방어구가 피해 ${applied.rawDamage}을(를) 모두 막음`);
+    }
+  } else if (applied.hpDelta > 0) {
+    parts.push(`HP +${applied.hpDelta} (회복)`);
+  }
   if (applied.added.length) parts.push(`획득: ${applied.added.join(', ')}`);
   if (applied.removed.length) parts.push(`소모: ${applied.removed.join(', ')}`);
   return parts.length ? `📋 ${parts.join(' · ')}` : null;

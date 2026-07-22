@@ -130,6 +130,19 @@ select#setProvider {
   color: var(--accent);
   padding: 0 4px;
 }
+.disclaimer {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  border-radius: 8px;
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.disclaimer b {
+  color: var(--accent);
+}
 .class-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -511,7 +524,39 @@ button.ghost:hover {
   font-size: 0.9rem;
   text-align: center;
   max-width: 96%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
+.dice-faces {
+  display: flex;
+  gap: 12px;
+}
+.die {
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--dice);
+}
+.entry.dice.rolling .die {
+  animation: dieTumble 0.22s infinite;
+}
+@keyframes dieTumble {
+  0%, 100% { transform: rotate(-14deg) scale(1); }
+  50% { transform: rotate(14deg) scale(1.14); }
+}
+.entry.dice.settled .die {
+  animation: dieLand 0.45s ease;
+}
+@keyframes dieLand {
+  0% { transform: scale(1.45); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.entry.dice.tier-strong .die { color: var(--state); }
+.entry.dice.tier-miss .die { color: var(--danger); }
+.entry.dice.tier-weak .die { color: var(--dice); }
+.dice-caption { font-size: 0.86rem; }
 .entry.state {
   align-self: center;
   background: #16281a;
@@ -636,21 +681,13 @@ button.ghost:hover {
 }
 
 /* ---------- 전투 효과 / 애니메이션 ---------- */
-/* 주사위 굴림 */
-.entry.dice.rolling {
-  animation: diceShake 0.28s infinite;
-}
+/* 주사위 박스 (눈 굴림은 위 .die 애니메이션에서 처리) */
 .entry.dice.settled {
   animation: dicePop 0.4s ease;
 }
-@keyframes diceShake {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  25% { transform: translateX(-3px) rotate(-4deg); }
-  75% { transform: translateX(3px) rotate(4deg); }
-}
 @keyframes dicePop {
-  0% { transform: scale(0.82); }
-  55% { transform: scale(1.07); }
+  0% { transform: scale(0.9); }
+  55% { transform: scale(1.04); }
   100% { transform: scale(1); }
 }
 .entry.dice.tier-strong {

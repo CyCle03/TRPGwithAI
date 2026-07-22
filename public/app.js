@@ -504,35 +504,57 @@ function clearSuggestions() {
 }
 
 // ---------- 렌더 ----------
+const DIE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+function dieFace(v) {
+  return DIE_FACES[v >= 1 && v <= 6 ? v - 1 : 0];
+}
+
 function renderLogEntry(entry) {
+  if (entry.kind === 'dice') {
+    // 저장 로그 재생: 주사위 눈 + 결과 (애니메이션 없이)
+    const div = document.createElement('div');
+    div.className = 'entry dice settled' + (entry.tier ? ' tier-' + entry.tier : '');
+    const d = entry.dice || [];
+    const faces = d.length
+      ? `<div class="dice-faces"><span class="die">${dieFace(d[0])}</span><span class="die">${dieFace(d[1])}</span></div>`
+      : '';
+    div.innerHTML = faces + `<div class="dice-caption">${escapeHtml(entry.text)}</div>`;
+    logInnerEl.appendChild(div);
+    return;
+  }
   const div = document.createElement('div');
   div.className = 'entry ' + (entry.kind || 'gm');
-  if (entry.kind === 'dice' && entry.tier) div.classList.add('tier-' + entry.tier);
   div.textContent = entry.text;
   logInnerEl.appendChild(div);
 }
 
-// 주사위 굴림 애니메이션: 잠깐 숫자가 돌다가 결과로 정착
+// 주사위 굴림 연출: 두 개의 주사위 눈이 구르다가 결과로 착지
 function animateDiceRoll(entry) {
   const div = document.createElement('div');
   div.className = 'entry dice rolling';
-  div.textContent = '🎲 주사위를 굴리는 중...';
+  div.innerHTML =
+    '<div class="dice-faces"><span class="die">⚂</span><span class="die">⚄</span></div>' +
+    '<div class="dice-caption">주사위를 굴리는 중…</div>';
   logInnerEl.appendChild(div);
   scrollLog();
+  const faces = div.querySelectorAll('.die');
+  const caption = div.querySelector('.dice-caption');
   let ticks = 0;
   const iv = setInterval(() => {
-    const a = 1 + Math.floor(Math.random() * 6);
-    const b = 1 + Math.floor(Math.random() * 6);
-    div.textContent = `🎲 [${a}, ${b}] 굴리는 중...`;
-    if (++ticks >= 8) {
+    faces[0].textContent = dieFace(1 + Math.floor(Math.random() * 6));
+    faces[1].textContent = dieFace(1 + Math.floor(Math.random() * 6));
+    if (++ticks >= 11) {
       clearInterval(iv);
+      const d = entry.dice || [1, 1];
+      faces[0].textContent = dieFace(d[0]);
+      faces[1].textContent = dieFace(d[1]);
       div.classList.remove('rolling');
       div.classList.add('settled');
       if (entry.tier) div.classList.add('tier-' + entry.tier);
-      div.textContent = entry.text;
+      caption.textContent = entry.text;
       scrollLog();
     }
-  }, 85);
+  }, 80);
 }
 
 // ---------- 적/동료 필드 ----------
