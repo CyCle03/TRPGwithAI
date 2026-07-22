@@ -131,10 +131,9 @@ io.on('connection', (socket) => {
   socket.emit('init', {
     username: user ? user.username : null,
     settings: user ? user.settings : null,
-    defaultModels: {
-      gemini: aiGM.defaultModel('gemini'),
-      anthropic: aiGM.defaultModel('anthropic'),
-    },
+    defaultModels: Object.fromEntries(
+      aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])
+    ),
     classes: listClasses(),
     statKeys: STAT_KEYS,
     standardArray: STANDARD_ARRAY,

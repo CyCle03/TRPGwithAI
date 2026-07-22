@@ -180,7 +180,7 @@ function updateSettings(id, { provider, model, apiKey }) {
   const u = db.users[id];
   if (!u) throw new Error('사용자를 찾을 수 없습니다.');
   const s = u.settings || {};
-  if (provider === 'gemini' || provider === 'anthropic') s.provider = provider;
+  if (['gemini', 'anthropic', 'openai', 'deepseek', 'xai'].includes(provider)) s.provider = provider;
   if (typeof model === 'string') s.model = model.trim().slice(0, 60);
   // apiKey: 비어있지 않은 값이 오면 교체, 빈 문자열이면 유지, null이면 삭제
   if (typeof apiKey === 'string' && apiKey.trim()) {

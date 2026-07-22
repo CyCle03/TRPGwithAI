@@ -10,10 +10,16 @@ const { ABILITIES } = require('./rulesEngine');
  */
 
 // 사용자별 provider 선택 (세션의 aiConfig 사용)
+const { makeProvider } = require('./providers/openaiCompatProvider');
 const PROVIDERS = {
   gemini: require('./providers/geminiProvider'),
   anthropic: require('./providers/anthropicProvider'),
+  openai: makeProvider({ name: 'OpenAI', baseURL: 'https://api.openai.com/v1', defaultModel: 'gpt-5-mini' }),
+  deepseek: makeProvider({ name: 'DeepSeek', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' }),
+  xai: makeProvider({ name: 'xAI Grok', baseURL: 'https://api.x.ai/v1', defaultModel: 'grok-4-fast-non-reasoning' }),
 };
+
+const PROVIDER_NAMES = Object.keys(PROVIDERS);
 
 function pickProvider(name) {
   return PROVIDERS[name] || PROVIDERS.gemini;
@@ -192,4 +198,4 @@ function normalize(parsed) {
   };
 }
 
-module.exports = { callGM, suggestGmActions, defaultModel };
+module.exports = { callGM, suggestGmActions, defaultModel, PROVIDER_NAMES };

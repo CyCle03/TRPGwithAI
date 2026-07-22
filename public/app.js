@@ -88,7 +88,7 @@ let currentStep = 1;
 let selectedClass = null;
 let statMode = 'recommend'; // 'recommend' | 'custom'
 let customStats = null; // {STR:.., ...}
-let selectedGear = []; // 선택한 장비 id 배열
+let selectedGearChoices = {}; // { groupId: optionId } 무기/방어구/장비 선택
 const TOTAL_STEPS = 4;
 let prevHp = null; // HP 변화 애니메이션용
 
@@ -160,10 +160,25 @@ function wireSocket() {
   });
 }
 
+const PROVIDER_LABELS = {
+  gemini: 'Gemini',
+  anthropic: 'Claude',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  xai: 'Grok',
+};
+const KEY_URLS = {
+  gemini: { url: 'aistudio.google.com/apikey', note: '무료 키 발급 가능(카드 불필요)' },
+  anthropic: { url: 'console.anthropic.com/settings/keys', note: '유료(선불 크레딧)' },
+  openai: { url: 'platform.openai.com/api-keys', note: '유료' },
+  deepseek: { url: 'platform.deepseek.com/api_keys', note: '유료(저렴)' },
+  xai: { url: 'console.x.ai', note: '유료' },
+};
+
 function updateModelNote() {
   if (!mySettings) return;
   const model = mySettings.model || defaultModels[mySettings.provider] || '기본';
-  const pname = mySettings.provider === 'anthropic' ? 'Claude' : 'Gemini';
+  const pname = PROVIDER_LABELS[mySettings.provider] || mySettings.provider;
   modelNote.textContent = `${pname} · ${model}${mySettings.hasApiKey ? '' : ' · ⚠ 키 미등록'}`;
 }
 
@@ -195,7 +210,7 @@ function resetWizard() {
   selectedClass = null;
   statMode = 'recommend';
   customStats = null;
-  selectedGear = [];
+  selectedGearChoices = {};
   charNameEl.value = '';
   charLookEl.value = '';
   startBtn.disabled = false;
@@ -217,7 +232,7 @@ function renderClasses(classes) {
     const moveNames = (c.moves || []).map((m) => m.name).join(', ');
     div.innerHTML = `<div class="cname">${c.name}</div>
       <div class="cdesc">${c.description}</div>
-      <div class="cstats">HP ${c.maxHp} · 방어구 ${c.armor} · d${c.damageDie} · ${statLine}</div>
+      <div class="cstats">HP ${c.maxHp} · 피해 d${c.damageDie} · ${statLine}</div>
       <div class="cmoves">배울 기술: ${moveNames}</div>`;
     div.addEventListener('click', () => {
       document
@@ -226,7 +241,7 @@ function renderClasses(classes) {
       div.classList.add('selected');
       selectedClass = c.id;
       customStats = null; // 클래스 바뀌면 배분 초기화
-      selectedGear = []; // 클래스 바뀌면 장비 초기화
+      selectedGearChoices = {}; // 클래스 바뀌면 장비 선택 초기화
       updateNav();
     });
     classListEl.appendChild(div);
@@ -249,11 +264,6 @@ function goToStep(step) {
   updateNav();
 }
 
-function gearPicksFor() {
-  const cls = getClass(selectedClass);
-  return cls ? cls.gearPicks || 2 : 2;
-}
-
 function updateNav() {
   prevBtn.classList.toggle('hidden', currentStep === 1);
   nextBtn.classList.toggle('hidden', currentStep === TOTAL_STEPS);
@@ -262,44 +272,69 @@ function updateNav() {
   let ok = true;
   if (currentStep === 1) ok = !!selectedClass;
   if (currentStep === 2) ok = statMode === 'recommend' || isCustomValid();
-  if (currentStep === 3) ok = selectedGear.length === gearPicksFor();
+  if (currentStep === 3) {
+    const groups = getClass(selectedClass)?.gearChoices || [];
+    ok = groups.every((g) => selectedGearChoices[g.id]);
+  }
   if (currentStep === 4) ok = charNameEl.value.trim().length > 0;
   nextBtn.disabled = !ok;
   startBtn.disabled = !ok;
 }
 
-// --- 장비 선택 + 배울 기술 ---
+// --- 장비 선택 (무기/방어구/장비 그룹) + 배울 기술 ---
+function computeArmor(cls) {
+  let armor = 0;
+  (cls.gearChoices || []).forEach((g) => {
+    const opt = g.options.find((o) => o.id === selectedGearChoices[g.id]);
+    if (opt && typeof opt.armor === 'number') armor += opt.armor;
+  });
+  return armor;
+}
+
 function renderGear() {
   const cls = getClass(selectedClass);
   if (!cls) return;
-  const picks = gearPicksFor();
 
-  // 기본(고정) 장비
-  baseGearEl.innerHTML = `<span class="bg-label">기본 장비:</span> ${cls.inventory.join(', ')}`;
+  // 각 그룹 기본 선택(첫 옵션)
+  (cls.gearChoices || []).forEach((g) => {
+    if (!selectedGearChoices[g.id]) selectedGearChoices[g.id] = g.options[0].id;
+  });
 
-  // 선택 장비 후보
-  gearHintEl.textContent = `기본 장비에 더해 아래에서 ${picks}개를 고르세요.`;
+  baseGearEl.innerHTML = `<span class="bg-label">기본 장비:</span> ${cls.baseGear.join(', ')}`;
+  gearHintEl.textContent = '무기·방어구·추가 장비를 하나씩 고르세요. 방어구 선택에 따라 방어력이 달라집니다.';
+  gearCountEl.textContent = '';
+
   gearOptionsEl.innerHTML = '';
-  (cls.gearOptions || []).forEach((g) => {
-    const chip = document.createElement('div');
-    const picked = selectedGear.includes(g.id);
-    const full = selectedGear.length >= picks && !picked;
-    chip.className = 'gear-chip' + (picked ? ' selected' : full ? ' disabled' : '');
-    chip.textContent = g.name;
-    if (!full || picked) {
+  (cls.gearChoices || []).forEach((group) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'gear-group';
+    const title = document.createElement('div');
+    title.className = 'gear-group-title';
+    title.textContent = group.label;
+    wrap.appendChild(title);
+    const opts = document.createElement('div');
+    opts.className = 'gear-group-opts';
+    group.options.forEach((o) => {
+      const chip = document.createElement('div');
+      const picked = selectedGearChoices[group.id] === o.id;
+      chip.className = 'gear-chip' + (picked ? ' selected' : '');
+      chip.textContent = o.name;
       chip.addEventListener('click', () => {
-        if (selectedGear.includes(g.id)) {
-          selectedGear = selectedGear.filter((x) => x !== g.id);
-        } else if (selectedGear.length < picks) {
-          selectedGear.push(g.id);
-        }
+        selectedGearChoices[group.id] = o.id;
         renderGear();
         updateNav();
       });
-    }
-    gearOptionsEl.appendChild(chip);
+      opts.appendChild(chip);
+    });
+    wrap.appendChild(opts);
+    gearOptionsEl.appendChild(wrap);
   });
-  gearCountEl.textContent = `(${selectedGear.length}/${picks})`;
+
+  // 현재 방어력 미리보기
+  const armorNote = document.createElement('div');
+  armorNote.className = 'gear-armor-note';
+  armorNote.textContent = `현재 방어력: ${computeArmor(cls)}`;
+  gearOptionsEl.appendChild(armorNote);
 
   // 배울 수 있는 기술
   learnMovesEl.innerHTML = '';
@@ -402,15 +437,15 @@ function renderSheetSummary() {
   if (!cls) return;
   const stats = statMode === 'custom' && customStats ? customStats : cls.stats;
   const statLine = statKeys.map((k) => `${k} ${fmtMod(stats[k])}`).join('  ');
-  const pickedNames = selectedGear
-    .map((id) => (cls.gearOptions || []).find((o) => o.id === id))
+  const chosenNames = (cls.gearChoices || [])
+    .map((g) => g.options.find((o) => o.id === selectedGearChoices[g.id]))
     .filter(Boolean)
     .map((o) => o.name);
-  const allGear = [...cls.inventory, ...pickedNames];
+  const allGear = [...cls.baseGear, ...chosenNames];
   const moveNames = (cls.moves || []).map((m) => m.name).join(', ');
   sheetSummaryEl.innerHTML =
     `<div><span class="lbl">클래스</span> ${cls.name}</div>` +
-    `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${cls.armor} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
+    `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${computeArmor(cls)} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
     `<div><span class="lbl">능력치</span> ${statLine}</div>` +
     `<div><span class="lbl">장비</span> ${allGear.join(', ')}</div>` +
     `<div><span class="lbl">배울 기술</span> ${moveNames}</div>`;
@@ -436,7 +471,7 @@ startBtn.addEventListener('click', () => {
     name,
     classId: selectedClass,
     look: charLookEl.value.trim(),
-    gear: selectedGear,
+    choices: selectedGearChoices,
   };
   if (statMode === 'custom' && isCustomValid()) payload.stats = customStats;
   socket.emit('createCharacter', payload);
@@ -852,10 +887,8 @@ function updateSettingsHints() {
   const prov = setProviderEl.value;
   setModelEl.placeholder = defaultModels[prov] || '기본값';
   keyStatusEl.textContent = mySettings && mySettings.hasApiKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
-  keyHelpEl.innerHTML =
-    prov === 'gemini'
-      ? '무료 키 발급: <b>aistudio.google.com/apikey</b> (카드 불필요)'
-      : '유료 키 발급: <b>console.anthropic.com</b>';
+  const k = KEY_URLS[prov] || KEY_URLS.gemini;
+  keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
 }
 setProviderEl.addEventListener('change', updateSettingsHints);
 settingsBtn.addEventListener('click', () => openSettings(false));

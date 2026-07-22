@@ -11,65 +11,162 @@ const STAT_KEYS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 const STANDARD_ARRAY = [2, 1, 1, 0, -1, -1];
 
 /**
- * 던전 월드 기본 8직업 프리셋. stats 값은 능력치 "보정치"를 직접 저장한다.
- * 추천 stats는 표준 배열(2,1,1,0,-1,-1)을 직업별로 배치한 것.
+ * 던전 월드 기본 8직업. 무기/방어구/추가장비를 그룹별로 선택한다(던전 월드식).
+ * 방어구는 선택한 옵션의 armor 값으로 캐릭터 방어구가 결정된다.
+ * stats 추천은 표준 배열(2,1,1,0,-1,-1)을 직업별로 배치한 것.
  */
 const CLASSES = {
   fighter: {
-    id: 'fighter', name: '전사',
+    id: 'fighter', name: '전사', damageDie: 10, maxHp: 22,
     description: '근접 전투의 달인. 튼튼하고 강력한 일격을 자랑한다.',
-    maxHp: 22, armor: 1, damageDie: 10,
     stats: { STR: 2, DEX: 1, CON: 1, INT: -1, WIS: 0, CHA: -1 },
-    inventory: ['장검', '사슬 갑옷', '방패', '여행 식량 5일분', '동전 몇 닢'],
+    baseGear: ['던전 배낭', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'sword', name: '장검(균형 잡힌)' },
+        { id: 'axe', name: '전투 도끼(강력한)' },
+        { id: 'hammer', name: '워해머(둔중하나 묵직한)' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'chain_shield', name: '사슬 갑옷 + 방패 (방어구 2)', armor: 2 },
+        { id: 'plate', name: '판금 갑옷 (방어구 2, 둔중)', armor: 2 },
+        { id: 'leather_shield', name: '가죽 갑옷 + 방패 (방어구 1, 기민)', armor: 1 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'potion', name: '치유 물약' },
+        { id: 'throwing', name: '투척용 단검 3자루' },
+        { id: 'rope', name: '밧줄과 갈고리' } ] },
+    ],
   },
   wizard: {
-    id: 'wizard', name: '마법사',
+    id: 'wizard', name: '마법사', damageDie: 4, maxHp: 16,
     description: '주문을 다루는 학자. 몸은 약하지만 지식과 마법이 무기다.',
-    maxHp: 16, armor: 0, damageDie: 4,
     stats: { STR: -1, DEX: 0, CON: 1, INT: 2, WIS: 1, CHA: -1 },
-    inventory: ['지팡이', '주문서', '단검', '여행 식량 5일분', '동전 몇 닢'],
+    baseGear: ['주문서', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'staff', name: '지팡이(원거리 마력)' },
+        { id: 'dagger', name: '단검(호신용)' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'robe', name: '마법사 로브 (방어구 0)', armor: 0 },
+        { id: 'leather', name: '가죽 갑옷 (방어구 1, 거추장)', armor: 1 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'materials', name: '마법 재료 주머니' },
+        { id: 'book', name: '고대 지식의 책' },
+        { id: 'potion', name: '치유 물약' } ] },
+    ],
   },
   cleric: {
-    id: 'cleric', name: '성직자',
+    id: 'cleric', name: '성직자', damageDie: 6, maxHp: 20,
     description: '신을 섬기는 사제. 치유와 신성한 힘으로 동료를 지킨다.',
-    maxHp: 20, armor: 1, damageDie: 6,
     stats: { STR: 1, DEX: -1, CON: 1, INT: 0, WIS: 2, CHA: -1 },
-    inventory: ['철퇴', '나무 방패', '성징(신앙의 상징)', '치유 약초', '여행 식량 5일분'],
+    baseGear: ['성징(신앙의 상징)', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'mace', name: '철퇴' },
+        { id: 'hammer', name: '전투 망치' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'chain', name: '사슬 갑옷 (방어구 1)', armor: 1 },
+        { id: 'leather_shield', name: '가죽 갑옷 + 나무 방패 (방어구 1)', armor: 1 },
+        { id: 'robe', name: '사제복 (방어구 0)', armor: 0 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'holy_water', name: '성수 한 병' },
+        { id: 'herbs', name: '치유 약초' },
+        { id: 'bandages', name: '붕대' } ] },
+    ],
   },
   thief: {
-    id: 'thief', name: '도적',
+    id: 'thief', name: '도적', damageDie: 8, maxHp: 18,
     description: '그림자 속의 전문가. 은신·기습·함정 해제에 능하다.',
-    maxHp: 18, armor: 1, damageDie: 8,
     stats: { STR: -1, DEX: 2, CON: 0, INT: 1, WIS: 1, CHA: -1 },
-    inventory: ['단검 두 자루', '가죽 갑옷', '도둑 도구', '연막탄', '독병 하나'],
+    baseGear: ['도둑 도구', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'daggers', name: '단검 두 자루' },
+        { id: 'short_sword', name: '짧은 검' },
+        { id: 'crossbow', name: '손 석궁' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
+        { id: 'cloak', name: '어둠의 망토 (방어구 0, 은밀)', armor: 0 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'poison', name: '독 묻은 침 3개' },
+        { id: 'smoke', name: '연막탄' },
+        { id: 'lockpicks', name: '정교한 자물쇠 도구' } ] },
+    ],
   },
   ranger: {
-    id: 'ranger', name: '레인저',
+    id: 'ranger', name: '레인저', damageDie: 8, maxHp: 18,
     description: '야생의 사냥꾼. 활과 추적술, 동물 동료로 싸운다.',
-    maxHp: 18, armor: 1, damageDie: 8,
     stats: { STR: 0, DEX: 2, CON: 1, INT: -1, WIS: 1, CHA: -1 },
-    inventory: ['장궁과 화살통', '단검', '가죽 갑옷', '사냥 덫', '여행 식량 5일분'],
+    baseGear: ['사냥 도구', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'bow', name: '장궁과 화살통' },
+        { id: 'crossbow', name: '석궁' },
+        { id: 'spear', name: '창' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
+        { id: 'light', name: '가벼운 차림 (방어구 0, 민첩)', armor: 0 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'trap', name: '사냥 덫' },
+        { id: 'falcon', name: '훈련된 매' },
+        { id: 'rations', name: '추가 식량' } ] },
+    ],
   },
   bard: {
-    id: 'bard', name: '음유시인',
+    id: 'bard', name: '음유시인', damageDie: 6, maxHp: 18,
     description: '이야기와 노래의 명인. 매혹과 전승 지식으로 상황을 이끈다.',
-    maxHp: 18, armor: 1, damageDie: 6,
     stats: { STR: -1, DEX: 1, CON: 0, INT: 1, WIS: -1, CHA: 2 },
-    inventory: ['세검', '가죽 갑옷', '악기', '여행 식량 5일분', '동전 두둑한 주머니'],
+    baseGear: ['악기', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'rapier', name: '세검' },
+        { id: 'dagger', name: '단검' },
+        { id: 'sling', name: '투석구' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
+        { id: 'fine', name: '화려한 의복 (방어구 0)', armor: 0 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'trinket', name: '값진 장신구' },
+        { id: 'scroll', name: '전설이 적힌 두루마리' },
+        { id: 'coins', name: '두둑한 동전 주머니' } ] },
+    ],
   },
   paladin: {
-    id: 'paladin', name: '성기사',
+    id: 'paladin', name: '성기사', damageDie: 10, maxHp: 22,
     description: '맹세로 무장한 성전사. 신앙과 강철로 악을 응징한다.',
-    maxHp: 22, armor: 2, damageDie: 10,
     stats: { STR: 2, DEX: -1, CON: 1, INT: -1, WIS: 0, CHA: 1 },
-    inventory: ['전투 망치', '판금 갑옷', '방패', '성징', '여행 식량 5일분'],
+    baseGear: ['성징', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'sword', name: '대검' },
+        { id: 'hammer', name: '전투 망치' },
+        { id: 'lance', name: '창' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'plate_shield', name: '판금 갑옷 + 방패 (방어구 3)', armor: 3 },
+        { id: 'chain_shield', name: '사슬 갑옷 + 방패 (방어구 2)', armor: 2 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'banner', name: '성전의 깃발' },
+        { id: 'relic', name: '성유물' },
+        { id: 'potion', name: '치유 물약' } ] },
+    ],
   },
   druid: {
-    id: 'druid', name: '드루이드',
+    id: 'druid', name: '드루이드', damageDie: 6, maxHp: 18,
     description: '자연의 대변자. 야수로 변신하고 자연의 힘을 부린다.',
-    maxHp: 18, armor: 1, damageDie: 6,
     stats: { STR: 0, DEX: 1, CON: 1, INT: -1, WIS: 2, CHA: -1 },
-    inventory: ['지팡이', '가죽 갑옷', '자연의 징표', '약초 주머니', '여행 식량 5일분'],
+    baseGear: ['자연의 징표', '여행 식량 5일분'],
+    gearChoices: [
+      { id: 'weapon', label: '주무기', options: [
+        { id: 'staff', name: '지팡이' },
+        { id: 'sickle', name: '낫' },
+        { id: 'sling', name: '투석구' } ] },
+      { id: 'armor', label: '방어구', options: [
+        { id: 'hide', name: '가죽 갑옷 (방어구 1)', armor: 1 },
+        { id: 'robe', name: '자연의 의복 (방어구 0)', armor: 0 } ] },
+      { id: 'kit', label: '추가 장비', options: [
+        { id: 'herbs', name: '희귀 약초 표본' },
+        { id: 'totem', name: '토템' },
+        { id: 'seeds', name: '마법의 씨앗' } ] },
+    ],
   },
 };
 
@@ -128,34 +225,10 @@ const ADVANCED_MOVES = {
 const HP_PER_LEVEL = 3; // 레벨업 시 최대 HP 증가량 (단순화 규칙)
 const STAT_CAP = 3; // 능력치 보정 상한
 
-// 시작 시 선택하는 추가 장비 (기본 장비에 더해 GEAR_PICKS개 선택).
-const GEAR_PICKS = 2;
-const COMMON_GEAR = [
-  { id: 'potion', name: '치유 물약' },
-  { id: 'rope', name: '밧줄과 갈고리' },
-  { id: 'torches', name: '횃불 다발' },
-  { id: 'bandages', name: '붕대와 약초' },
-];
-// 클래스별 특색 있는 선택 장비 1종
-const CLASS_SPECIAL_GEAR = {
-  fighter: '투척용 단검 3자루',
-  wizard: '마법 재료 주머니',
-  cleric: '성수 한 병',
-  thief: '독 묻은 침 3개',
-  ranger: '사냥용 미끼와 올가미',
-  bard: '값진 장신구',
-  paladin: '성전의 깃발',
-  druid: '희귀 약초 표본',
-};
-
-/** 해당 클래스의 선택 가능한 시작 장비 목록. */
-function getGearOptions(classId) {
+/** 클래스의 무기/방어구/추가장비 선택 그룹을 반환. */
+function getGearChoices(classId) {
   const cls = CLASSES[classId] || CLASSES.fighter;
-  const opts = COMMON_GEAR.map((g) => ({ ...g }));
-  if (CLASS_SPECIAL_GEAR[cls.id]) {
-    opts.push({ id: 'special', name: CLASS_SPECIAL_GEAR[cls.id] });
-  }
-  return opts;
+  return cls.gearChoices || [];
 }
 
 /** 레벨업 임계값: 현재 레벨 + 7 (던전 월드 방식). */
@@ -235,7 +308,8 @@ function isValidStatArray(stats) {
  * 클래스 프리셋으로 새 캐릭터 상태 객체를 만든다.
  * @param {string} name
  * @param {string} classId
- * @param {object} [opts] { stats?: 직접 배분한 보정치, look?: 한 줄 소개, gear?: 선택 장비 id 배열 }
+ * @param {object} [opts] { stats?: 직접 배분한 보정치, look?: 한 줄 소개,
+ *                          choices?: {groupId: optionId} 무기/방어구/장비 선택 }
  */
 function createCharacter(name, classId, opts = {}) {
   const cls = CLASSES[classId] || CLASSES.fighter;
@@ -243,14 +317,17 @@ function createCharacter(name, classId, opts = {}) {
   const stats = isValidStatArray(opts.stats)
     ? Object.fromEntries(STAT_KEYS.map((k) => [k, opts.stats[k]]))
     : { ...cls.stats };
-  // 선택 장비: 유효한 id만, 중복 제거, 최대 GEAR_PICKS개
-  const options = getGearOptions(cls.id);
-  const pickedIds = Array.isArray(opts.gear) ? [...new Set(opts.gear)] : [];
-  const pickedNames = pickedIds
-    .map((id) => options.find((o) => o.id === id))
-    .filter(Boolean)
-    .slice(0, GEAR_PICKS)
-    .map((o) => o.name);
+  // 무기/방어구/장비 선택 적용 (그룹별 1개, 없으면 첫 옵션 기본). 방어구는 armor 합산.
+  const choices = opts.choices || {};
+  const chosenNames = [];
+  let armor = 0;
+  for (const group of cls.gearChoices || []) {
+    const picked = group.options.find((o) => o.id === choices[group.id]) || group.options[0];
+    if (picked) {
+      chosenNames.push(picked.name);
+      if (typeof picked.armor === 'number') armor += picked.armor;
+    }
+  }
   return {
     name: String(name || '이름 없는 모험가').slice(0, 40),
     classId: cls.id,
@@ -260,9 +337,9 @@ function createCharacter(name, classId, opts = {}) {
     xp: 0,
     maxHp: cls.maxHp,
     hp: cls.maxHp,
-    armor: cls.armor,
+    armor,
     stats,
-    inventory: [...cls.inventory, ...pickedNames],
+    inventory: [...cls.baseGear, ...chosenNames],
     moves: [],
     damageDie: cls.damageDie,
   };
@@ -283,12 +360,10 @@ function listClasses() {
     name: c.name,
     description: c.description,
     maxHp: c.maxHp,
-    armor: c.armor,
     damageDie: c.damageDie,
     stats: c.stats,
-    inventory: c.inventory, // 기본(고정) 장비
-    gearOptions: getGearOptions(c.id), // 선택 장비 후보
-    gearPicks: GEAR_PICKS, // 선택 개수
+    baseGear: c.baseGear, // 기본(고정) 장비
+    gearChoices: c.gearChoices, // 무기/방어구/장비 선택 그룹
     moves: ADVANCED_MOVES[c.id] || [], // 배울 수 있는 기술 (전체 {id,name,desc})
   }));
 }
@@ -302,6 +377,7 @@ module.exports = {
   createCharacter,
   ensureCharacterFields,
   isValidStatArray,
+  getGearChoices,
   listClasses,
   xpToLevel,
   getLevelUpOptions,

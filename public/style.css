@@ -291,10 +291,27 @@ select#setProvider {
   color: var(--accent);
 }
 .gear-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.gear-group-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.gear-group-opts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 8px;
-  margin-bottom: 8px;
+}
+.gear-armor-note {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+  padding-top: 4px;
 }
 .gear-chip {
   background: var(--panel-2);
