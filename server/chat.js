@@ -92,11 +92,18 @@ function normalizeDef(raw) {
     }))
     .filter((im) => im.id && im.tag)
     .slice(0, MAX_IMAGES);
+  // 장르·태그 (검색/분류용). 최대 6개, 각 20자.
+  const tags = (Array.isArray(d.tags) ? d.tags : [])
+    .map((t) => String(t || '').trim().replace(/^#/, '').slice(0, 20))
+    .filter(Boolean)
+    .filter((t, i, a) => a.indexOf(t) === i)
+    .slice(0, 6);
   return {
     worldTitle: String(d.worldTitle || '').trim().slice(0, 80),
     worldLore: String(d.worldLore || '').slice(0, 6000),
     characters,
     images,
+    tags,
     responseLength: normalizeLength(d.responseLength), // 제작자 권장 출력량
     scenario: String(d.scenario || '').slice(0, 3000),
     greeting: String(d.greeting || '').slice(0, 2000),

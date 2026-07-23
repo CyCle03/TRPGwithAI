@@ -718,8 +718,72 @@ io.on('connection', (socket) => {
     emit('chatState', chatStatePayload(c, userId));
   });
 
-  socket.on('galleryList', () => {
-    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+  socket.on('galleryList', (payload) => {
+    const sort = (payload && payload.sort) || 'recent';
+    const tag = (payload && payload.tag) || '';
+    emit('gallery', {
+      items: publish.listPublic({ sort, tag }),
+      tags: publish.listTags(),
+      sort,
+      tag,
+    });
+  });
+
+  // 내 프로필: 내가 공개한 작품 + 합계
+  socket.on('profileList', () => {
+    const mine = publish.listMine(userId);
+    emit('profile', {
+      username: user ? user.username : '',
+      mine,
+      totals: {
+        works: mine.length,
+        likes: mine.reduce((s, x) => s + (x.likes || 0), 0),
+        plays: mine.reduce((s, x) => s + (x.plays || 0), 0),
+        comments: mine.reduce((s, x) => s + (x.commentCount || 0), 0),
+      },
+    });
+  });
+
+  // 추천(좋아요) 토글
+  socket.on('toggleLike', (payload) => {
+    try {
+      const r = publish.toggleLike(payload && payload.id, userId);
+      emit('likeUpdated', { id: payload.id, ...r });
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+
+  // 댓글 조회 / 작성 / 삭제
+  socket.on('loadComments', (payload) => {
+    const id = payload && payload.id;
+    emit('comments', { id, items: publish.listComments(id), me: userId });
+  });
+  socket.on('addComment', (payload) => {
+    try {
+      const items = publish.addComment(
+        payload && payload.id,
+        userId,
+        user ? user.username : '익명',
+        payload && payload.text
+      );
+      emit('comments', { id: payload.id, items, me: userId });
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+  socket.on('deleteComment', (payload) => {
+    try {
+      const items = publish.deleteComment(
+        payload && payload.id,
+        payload && payload.commentId,
+        userId,
+        isAdmin(user)
+      );
+      emit('comments', { id: payload.id, items, me: userId });
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
   });
 
   // 신고 접수 (본인 작품·중복 신고 불가)
@@ -753,7 +817,8 @@ io.on('connection', (socket) => {
       return emit('error', { message: e.message });
     }
     emit('adminReports', { items: publish.listReported() });
-    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+    emit('gallery', { items: publish.listPublic(), tags: publish.listTags(), sort: 'recent', tag: '' });
+    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId), totals: null });
   });
 
   // 갤러리의 '내가 공개한 것'에서 바로 공개 중단(연결된 챗이 없어도 가능)
@@ -768,7 +833,8 @@ io.on('connection', (socket) => {
       if (c.publishedId === (payload && payload.id)) c.publishedId = null;
     });
     persistChats(userId, uc);
-    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+    emit('gallery', { items: publish.listPublic(), tags: publish.listTags(), sort: 'recent', tag: '' });
+    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId), totals: null });
   });
 
   // 갤러리 항목을 내 대화로 가져와 플레이 (정의는 복사, 대화는 각자 별도)

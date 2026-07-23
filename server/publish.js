@@ -79,14 +79,93 @@ function unpublish(pubId, ownerId) {
   return true;
 }
 
-/** 갤러리 목록(공개된 것만, 최신순). def 본문은 빼고 요약만. */
-function listPublic(limit = 60) {
+/**
+ * 갤러리 목록(공개된 것만).
+ * @param {object} opts { sort:'recent'|'likes'|'plays', tag:string, limit:number }
+ */
+function listPublic(opts = {}) {
+  const { sort = 'recent', tag = '', limit = 60 } = opts;
   const db = loadAll();
-  return Object.values(db.entries)
+  let list = Object.values(db.entries).filter((e) => e.visibility === 'public');
+  if (tag) {
+    const t = String(tag).toLowerCase();
+    list = list.filter((e) => ((e.def && e.def.tags) || []).some((x) => String(x).toLowerCase() === t));
+  }
+  const by = {
+    likes: (a, b) => (b.likes || 0) - (a.likes || 0) || String(b.updatedAt).localeCompare(String(a.updatedAt)),
+    plays: (a, b) => (b.plays || 0) - (a.plays || 0) || String(b.updatedAt).localeCompare(String(a.updatedAt)),
+    recent: (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)),
+  };
+  return list.sort(by[sort] || by.recent).slice(0, limit).map(summarize);
+}
+
+/** 공개된 작품들에 쓰인 태그 목록(많이 쓰인 순). */
+function listTags(limit = 24) {
+  const db = loadAll();
+  const counts = {};
+  Object.values(db.entries)
     .filter((e) => e.visibility === 'public')
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .forEach((e) => ((e.def && e.def.tags) || []).forEach((t) => (counts[t] = (counts[t] || 0) + 1)));
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
-    .map(summarize);
+    .map(([tag, count]) => ({ tag, count }));
+}
+
+/** 추천(좋아요) 토글. @returns {{likes:number, liked:boolean}} */
+function toggleLike(pubId, userId) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) throw new Error('없는 항목입니다.');
+  e.likedBy = e.likedBy || {};
+  const liked = !!e.likedBy[userId];
+  if (liked) delete e.likedBy[userId];
+  else e.likedBy[userId] = true;
+  e.likes = Object.keys(e.likedBy).length;
+  saveAll(db);
+  return { likes: e.likes, liked: !liked };
+}
+
+/** 댓글 목록. */
+function listComments(pubId) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  return e && Array.isArray(e.comments) ? e.comments : [];
+}
+
+/** 댓글 작성. */
+function addComment(pubId, userId, userName, text) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) throw new Error('없는 항목입니다.');
+  const body = String(text || '').trim().slice(0, 500);
+  if (!body) throw new Error('댓글 내용을 입력하세요.');
+  e.comments = e.comments || [];
+  if (e.comments.length >= 300) e.comments.shift();
+  e.comments.push({
+    id: crypto.randomBytes(6).toString('hex'),
+    userId,
+    userName,
+    text: body,
+    at: new Date().toISOString(),
+  });
+  saveAll(db);
+  return e.comments;
+}
+
+/** 댓글 삭제 — 작성자 본인, 작품 소유자, 운영자만. */
+function deleteComment(pubId, commentId, userId, isAdmin) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e || !Array.isArray(e.comments)) return [];
+  const c = e.comments.find((x) => x.id === commentId);
+  if (!c) return e.comments;
+  if (c.userId !== userId && e.ownerId !== userId && !isAdmin) {
+    throw new Error('삭제 권한이 없습니다.');
+  }
+  e.comments = e.comments.filter((x) => x.id !== commentId);
+  saveAll(db);
+  return e.comments;
 }
 
 /** 내가 공개한 목록. */
@@ -114,6 +193,9 @@ function summarize(e) {
     imageCount: (d.images || []).length,
     coverImageId: (d.images || [])[0] ? d.images[0].id : null,
     // 세계관·시나리오 본문은 노출하지 않는다(프롬프트 유출 방지). 등장인물 이름만 미리보기.
+    tags: d.tags || [],
+    likes: e.likes || 0,
+    commentCount: Array.isArray(e.comments) ? e.comments.length : 0,
     reports: e.reports || 0,
     blocked: !!e.blocked,
   };
@@ -250,6 +332,11 @@ module.exports = {
   get,
   bumpPlays,
   transferOwner,
+  listTags,
+  toggleLike,
+  listComments,
+  addComment,
+  deleteComment,
   addReport,
   listReported,
   blockEntry,

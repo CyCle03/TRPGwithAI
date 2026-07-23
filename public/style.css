@@ -308,6 +308,140 @@ select#setProvider {
   gap: 10px;
   margin-bottom: 16px;
 }
+/* 갤러리 정렬·태그 필터 */
+.gallery-controls {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.gallery-controls select {
+  width: auto;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+.tag-filter,
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+.tag-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tag-chip:hover {
+  color: var(--text);
+  border-color: var(--accent-2);
+}
+.tag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #211a0e;
+  font-weight: 700;
+}
+.tag-chip.static {
+  cursor: default;
+  color: var(--accent);
+}
+/* 프로필 합계 */
+.profile-totals {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.pt-item {
+  flex: 1 1 90px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.pt-num {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.pt-key {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+/* 상세 모달: 추천 + 댓글 */
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.detail-actions button {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+}
+#dtLike.liked {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.comment-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.comment {
+  position: relative;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 6px;
+}
+.comment .c-head {
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.comment .c-body {
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.comment .c-del {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.comment .c-del:hover {
+  color: var(--danger);
+}
+.comment-form {
+  display: flex;
+  gap: 8px;
+}
+.comment-form input {
+  flex: 1;
+  margin-bottom: 0;
+}
+.comment-form button {
+  width: auto;
+  margin-top: 0;
+  flex: 0 0 auto;
+  padding: 10px 16px;
+}
 .gallery-empty {
   color: var(--muted);
   font-size: 0.85rem;

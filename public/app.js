@@ -152,10 +152,38 @@ const cpSaveBtn = document.getElementById('cpSave');
 const galleryEl = document.getElementById('gallery');
 const galleryBtn = document.getElementById('galleryBtn');
 const galleryListEl = document.getElementById('galleryList');
-const galleryMineEl = document.getElementById('galleryMine');
 const adminPanelEl = document.getElementById('adminPanel');
 const adminListEl = document.getElementById('adminList');
 let amAdmin = false;
+
+// 갤러리 정렬·태그 / 프로필 / 상세(댓글·추천)
+const gallerySortEl = document.getElementById('gallerySort');
+const galleryTagsEl = document.getElementById('galleryTags');
+const profileEl = document.getElementById('profile');
+const profileSubEl = document.getElementById('profileSub');
+const profileTotalsEl = document.getElementById('profileTotals');
+const profileListEl = document.getElementById('profileList');
+const profileBtn = document.getElementById('profileBtn');
+const profileCloseBtn = document.getElementById('profileClose');
+const profileGalleryBtn = document.getElementById('profileGallery');
+const detailModal = document.getElementById('detailModal');
+const dtTitleEl = document.getElementById('dtTitle');
+const dtMetaEl = document.getElementById('dtMeta');
+const dtTagsEl = document.getElementById('dtTags');
+const dtLikeBtn = document.getElementById('dtLike');
+const dtLikeCountEl = document.getElementById('dtLikeCount');
+const dtPlayBtn = document.getElementById('dtPlay');
+const dtCommentsEl = document.getElementById('dtComments');
+const dtCommentCountEl = document.getElementById('dtCommentCount');
+const dtCommentInput = document.getElementById('dtCommentInput');
+const dtCommentSend = document.getElementById('dtCommentSend');
+const dtCloseBtn = document.getElementById('dtClose');
+const cpTagsEl = document.getElementById('cpTags');
+const cpTagSuggestEl = document.getElementById('cpTagSuggest');
+let gallerySort = 'recent';
+let galleryTag = '';
+let detailItem = null;
+const GENRE_SUGGEST = ['판타지', '로맨스', '미스터리', '호러', 'SF', '학원', '무협', '일상', '느와르', '코미디'];
 const galleryCloseBtn = document.getElementById('galleryClose');
 const cpVisibilityEl = document.getElementById('cpVisibility');
 const cpPublishBtn = document.getElementById('cpPublish');
@@ -276,9 +304,23 @@ function wireSocket() {
   socket.on('chatRollback', () => removeLastChatUserMsg());
   socket.on('reportDone', ({ count }) => alert(`신고가 접수되었습니다. (누적 ${count}건)`));
   socket.on('adminReports', ({ items }) => renderAdminReports(items));
+  socket.on('profile', (data) => renderProfile(data));
+  socket.on('comments', ({ id, items, me }) => renderComments(id, items, me));
+  socket.on('likeUpdated', ({ id, likes, liked }) => {
+    if (detailItem && detailItem.id === id) {
+      detailItem.likes = likes;
+      dtLikeCountEl.textContent = likes;
+      dtLikeBtn.classList.toggle('liked', liked);
+    }
+    requestGallery();
+  });
   socket.on('gallery', (data) => {
+    if (data.sort) gallerySort = data.sort;
+    if (typeof data.tag === 'string') galleryTag = data.tag;
+    if (gallerySortEl) gallerySortEl.value = gallerySort;
+    renderTagFilter(data.tags);
     renderGalleryList(galleryListEl, data.items, false);
-    renderGalleryList(galleryMineEl, data.mine, true);
+    if (!profileEl.classList.contains('hidden')) return; // 프로필 보는 중이면 화면 유지
     showGallery();
   });
 
@@ -600,9 +642,10 @@ function renderGalleryList(el, items, mine) {
     body.className = 'gi-body';
     const meta = [
       `by ${it.ownerName}`,
-      it.characterCount ? `캐릭터 ${it.characterCount}` : null,
-      it.imageCount ? `이미지 ${it.imageCount}` : null,
+      `♥ ${it.likes || 0}`,
+      `💬 ${it.commentCount || 0}`,
       `플레이 ${it.plays}`,
+      it.tags && it.tags.length ? it.tags.map((t) => '#' + t).join(' ') : null,
       mine ? VIS_LABEL[it.visibility] : null,
     ]
       .filter(Boolean)
@@ -618,6 +661,12 @@ function renderGalleryList(el, items, mine) {
     play.textContent = '플레이';
     play.addEventListener('click', () => socket.emit('playPublished', { id: it.id }));
     card.appendChild(play);
+    const detail = document.createElement('button');
+    detail.className = 'ghost gi-play';
+    detail.textContent = '💬 상세';
+    detail.title = '태그 · 추천 · 댓글 보기';
+    detail.addEventListener('click', () => openDetail(it));
+    card.appendChild(detail);
     if (!mine) {
       const rep = document.createElement('button');
       rep.className = 'ghost gi-play';
@@ -642,6 +691,119 @@ function renderGalleryList(el, items, mine) {
       card.appendChild(un);
     }
     el.appendChild(card);
+  });
+}
+
+/** 갤러리 태그 필터 칩 렌더. */
+function renderTagFilter(tags) {
+  if (!galleryTagsEl) return;
+  galleryTagsEl.innerHTML = '';
+  const all = document.createElement('button');
+  all.className = 'tag-chip' + (galleryTag ? '' : ' active');
+  all.textContent = '전체';
+  all.addEventListener('click', () => {
+    galleryTag = '';
+    requestGallery();
+  });
+  galleryTagsEl.appendChild(all);
+  (tags || []).forEach((t) => {
+    const b = document.createElement('button');
+    b.className = 'tag-chip' + (galleryTag === t.tag ? ' active' : '');
+    b.textContent = `#${t.tag} ${t.count}`;
+    b.addEventListener('click', () => {
+      galleryTag = galleryTag === t.tag ? '' : t.tag;
+      requestGallery();
+    });
+    galleryTagsEl.appendChild(b);
+  });
+}
+
+function requestGallery() {
+  socket.emit('galleryList', { sort: gallerySort, tag: galleryTag });
+}
+
+/** 내 프로필 렌더. */
+function renderProfile(data) {
+  if (!profileListEl) return;
+  profileSubEl.textContent = `${data.username || ''} 님이 공개한 작품입니다.`;
+  if (data.totals) {
+    profileTotalsEl.innerHTML = '';
+    [
+      ['작품', data.totals.works],
+      ['♥ 추천', data.totals.likes],
+      ['플레이', data.totals.plays],
+      ['댓글', data.totals.comments],
+    ].forEach(([k, v]) => {
+      const d = document.createElement('div');
+      d.className = 'pt-item';
+      d.innerHTML = `<div class="pt-num"></div><div class="pt-key"></div>`;
+      d.querySelector('.pt-num').textContent = v;
+      d.querySelector('.pt-key').textContent = k;
+      profileTotalsEl.appendChild(d);
+    });
+  }
+  renderGalleryList(profileListEl, data.mine || [], true);
+}
+
+/** 작품 상세(태그·추천·댓글) 모달 열기. */
+function openDetail(it) {
+  detailItem = it;
+  dtTitleEl.textContent = it.title;
+  dtMetaEl.textContent = [
+    `by ${it.ownerName}`,
+    it.characterCount ? `캐릭터 ${it.characterCount}` : null,
+    it.imageCount ? `이미지 ${it.imageCount}` : null,
+    `플레이 ${it.plays}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  dtTagsEl.innerHTML = '';
+  (it.tags || []).forEach((t) => {
+    const s = document.createElement('span');
+    s.className = 'tag-chip static';
+    s.textContent = `#${t}`;
+    dtTagsEl.appendChild(s);
+  });
+  dtLikeCountEl.textContent = it.likes || 0;
+  detailModal.classList.remove('hidden');
+  socket.emit('loadComments', { id: it.id });
+}
+
+/** 댓글 목록 렌더. */
+function renderComments(id, items, me) {
+  if (!detailItem || detailItem.id !== id) return;
+  dtCommentCountEl.textContent = `(${items.length})`;
+  dtCommentsEl.innerHTML = '';
+  if (!items.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = '아직 댓글이 없습니다.';
+    dtCommentsEl.appendChild(p);
+    return;
+  }
+  items.forEach((c) => {
+    const d = document.createElement('div');
+    d.className = 'comment';
+    const head = document.createElement('div');
+    head.className = 'c-head';
+    head.textContent = `${c.userName} · ${String(c.at).slice(0, 10)}`;
+    const body = document.createElement('div');
+    body.className = 'c-body';
+    body.textContent = c.text;
+    d.appendChild(head);
+    d.appendChild(body);
+    if (c.userId === me || amAdmin || (detailItem && detailItem.ownerName === userNameEl.textContent)) {
+      const del = document.createElement('button');
+      del.className = 'c-del';
+      del.textContent = '삭제';
+      del.addEventListener('click', () => {
+        if (confirm('이 댓글을 삭제할까요?')) {
+          socket.emit('deleteComment', { id, commentId: c.id });
+        }
+      });
+      d.appendChild(del);
+    }
+    dtCommentsEl.appendChild(d);
   });
 }
 
@@ -783,6 +945,8 @@ function openChatSetupForm(data) {
   cpGreetingEl.value = d.greeting || '';
   cpUserPersonaEl.value = d.userPersona || '';
   cpLengthEl.value = d.responseLength || 'medium';
+  cpTagsEl.value = (d.tags || []).join(', ');
+  renderTagSuggestions();
   updatePublishHint(data && data.published);
   chatSetupErrorEl.classList.add('hidden');
   showChatSetup();
@@ -802,7 +966,32 @@ function collectDef() {
     greeting: cpGreetingEl.value.trim(),
     userPersona: cpUserPersonaEl.value.trim(),
     responseLength: cpLengthEl.value, // 제작자 권장 출력량
+    tags: cpTagsEl.value
+      .split(',')
+      .map((t) => t.trim().replace(/^#/, ''))
+      .filter(Boolean)
+      .slice(0, 6),
   };
+}
+
+/** 장르 추천 칩 — 클릭하면 태그 입력에 추가. */
+function renderTagSuggestions() {
+  if (!cpTagSuggestEl) return;
+  cpTagSuggestEl.innerHTML = '';
+  GENRE_SUGGEST.forEach((g) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tag-chip';
+    b.textContent = `#${g}`;
+    b.addEventListener('click', () => {
+      const cur = cpTagsEl.value.split(',').map((t) => t.trim()).filter(Boolean);
+      if (cur.includes(g)) return;
+      if (cur.length >= 6) return;
+      cur.push(g);
+      cpTagsEl.value = cur.join(', ');
+    });
+    cpTagSuggestEl.appendChild(b);
+  });
 }
 
 // ---------- 화면 전환 ----------
@@ -1318,9 +1507,48 @@ cpAddCharBtn.addEventListener('click', () => {
 });
 const cpGalleryBtn = document.getElementById('cpGallery');
 function openGallery() {
-  socket.emit('galleryList');
+  requestGallery();
   if (amAdmin) socket.emit('adminReports');
 }
+function showProfile() {
+  hideAllScreens();
+  profileEl.classList.remove('hidden');
+  setLandingBg(true);
+}
+// 정렬 변경
+if (gallerySortEl) {
+  gallerySortEl.addEventListener('change', () => {
+    gallerySort = gallerySortEl.value;
+    requestGallery();
+  });
+}
+// 프로필
+profileBtn.addEventListener('click', () => {
+  socket.emit('profileList');
+  showProfile();
+});
+profileCloseBtn.addEventListener('click', () => setMode(currentMode));
+profileGalleryBtn.addEventListener('click', openGallery);
+// 상세 모달
+dtCloseBtn.addEventListener('click', () => detailModal.classList.add('hidden'));
+dtLikeBtn.addEventListener('click', () => {
+  if (detailItem) socket.emit('toggleLike', { id: detailItem.id });
+});
+dtPlayBtn.addEventListener('click', () => {
+  if (!detailItem) return;
+  detailModal.classList.add('hidden');
+  socket.emit('playPublished', { id: detailItem.id });
+});
+function sendComment() {
+  const t = dtCommentInput.value.trim();
+  if (!t || !detailItem) return;
+  dtCommentInput.value = '';
+  socket.emit('addComment', { id: detailItem.id, text: t });
+}
+dtCommentSend.addEventListener('click', sendComment);
+dtCommentInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendComment();
+});
 galleryBtn.addEventListener('click', openGallery);
 cpGalleryBtn.addEventListener('click', openGallery);
 galleryCloseBtn.addEventListener('click', () => setMode('chat'));

@@ -18,7 +18,7 @@
         <button id="modeGameBtn" class="mode-btn active" title="AI GM 던전월드">🎲 게임</button>
         <button id="modeChatBtn" class="mode-btn" title="캐릭터 챗">💬 챗</button>
       </div>
-      <span id="userName"></span>
+      <button id="profileBtn" class="ghost" title="내 프로필"><span id="userName"></span></button>
       <button id="settingsBtn" class="ghost" title="설정">⚙ 설정</button>
       <button id="logoutBtn" class="ghost">로그아웃</button>
     </div>
@@ -211,6 +211,10 @@
         <label>내 페르소나 <span class="opt">(선택)</span></label>
         <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
 
+        <label>장르 · 태그 <span class="opt">(선택 · 쉼표로 구분, 최대 6개)</span></label>
+        <input id="cpTags" type="text" placeholder="예: 판타지, 미스터리, 느와르" />
+        <div id="cpTagSuggest" class="tag-row"></div>
+
         <label>권장 응답 길이 <span class="opt">(플레이어가 각자 바꿀 수 있어요)</span></label>
         <select id="cpLength">
           <option value="veryshort">아주 짧게 (1~2문장 · 메신저형)</option>
@@ -266,10 +270,17 @@
       <div class="setup-card wide">
         <h1>🌐 갤러리</h1>
         <p class="subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
-        <div id="galleryList" class="gallery-list"></div>
-        <label>내가 공개한 것</label>
-        <div id="galleryMine" class="gallery-list"></div>
 
+        <div class="gallery-controls">
+          <select id="gallerySort">
+            <option value="recent">최신순</option>
+            <option value="likes">추천순</option>
+            <option value="plays">플레이순</option>
+          </select>
+          <div id="galleryTags" class="tag-filter"></div>
+        </div>
+
+        <div id="galleryList" class="gallery-list"></div>
         <div id="adminPanel" class="hidden">
           <label>🛡 신고 관리 <span class="opt">(운영자 전용)</span></label>
           <p class="hint">신고가 들어온 항목입니다. 확인 후 조치하세요.</p>
@@ -277,6 +288,43 @@
         </div>
         <div class="wizard-nav">
           <button id="galleryClose" class="ghost">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 내 프로필 (내가 공개한 작품) -->
+    <div id="profile" class="setup hidden">
+      <div class="setup-card wide">
+        <h1>👤 내 프로필</h1>
+        <p class="subtitle" id="profileSub"></p>
+        <div id="profileTotals" class="profile-totals"></div>
+        <label>내가 공개한 작품</label>
+        <div id="profileList" class="gallery-list"></div>
+        <div class="wizard-nav">
+          <button id="profileClose" class="ghost">닫기</button>
+          <button id="profileGallery" class="ghost">🌐 갤러리</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 작품 상세 (태그 · 추천 · 댓글) -->
+    <div id="detailModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h2 id="dtTitle">작품</h2>
+        <p class="modal-sub" id="dtMeta"></p>
+        <div id="dtTags" class="tag-row"></div>
+        <div class="detail-actions">
+          <button id="dtLike" class="ghost">♥ 추천 <span id="dtLikeCount">0</span></button>
+          <button id="dtPlay" class="primary">플레이</button>
+        </div>
+        <label>댓글 <span class="opt" id="dtCommentCount"></span></label>
+        <div id="dtComments" class="comment-list"></div>
+        <div class="comment-form">
+          <input id="dtCommentInput" type="text" maxlength="500" placeholder="댓글을 입력하세요" />
+          <button id="dtCommentSend" class="primary">등록</button>
+        </div>
+        <div class="wizard-nav">
+          <button id="dtClose" class="ghost">닫기</button>
         </div>
       </div>
     </div>
