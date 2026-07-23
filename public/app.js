@@ -1184,7 +1184,9 @@ cpAddCharBtn.addEventListener('click', () => {
   chatChars.push({ name: '', description: '' });
   renderCharEditors();
 });
+const cpGalleryBtn = document.getElementById('cpGallery');
 galleryBtn.addEventListener('click', () => socket.emit('galleryList'));
+cpGalleryBtn.addEventListener('click', () => socket.emit('galleryList'));
 galleryCloseBtn.addEventListener('click', () => setMode('chat'));
 cpPublishBtn.addEventListener('click', () => {
   const def = collectDef();
