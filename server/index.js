@@ -920,7 +920,8 @@ io.on('connection', (socket) => {
       // 무료 체험(CPU 로컬 모델)은 초당 생성 토큰이 적어 길이를 최소로 제한한다.
       const len =
         provider === 'free' ? 'veryshort' : chat.effectiveLength(c.def, c.lengthOverride);
-      const system = chat.buildSystemPrompt(c.def, len);
+      // 무료 체험은 CPU 추론이라 입력 토큰(프롬프트 읽기)이 병목 → 지시문 압축
+      const system = chat.buildSystemPrompt(c.def, len, { compact: provider === 'free' });
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const reply = await aiGM.chatReply(
         { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL },

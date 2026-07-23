@@ -172,13 +172,21 @@ function displayName(def) {
  * def(사용자 정의)를 시스템 프롬프트 문자열로. 빈 필드는 생략.
  * @param {string} [lengthOverride] 플레이어가 지정한 출력량(없으면 제작자 권장값)
  */
-function buildSystemPrompt(def, lengthOverride) {
+function buildSystemPrompt(def, lengthOverride, opts) {
   const d = def || {};
+  const compact = !!(opts && opts.compact); // 느린 로컬 모델용: 지시문을 최소화해 입력 토큰 절약
   const chars = (d.characters || []).filter((c) => c.name);
   const multi = chars.length > 1;
 
   const lines = [];
-  if (multi) {
+  if (compact) {
+    lines.push(
+      multi
+        ? '너는 아래 세계관의 내레이터이자 등장인물 전원을 연기한다. 대사는 "이름: 대사" 형식.'
+        : '너는 아래 캐릭터를 1인칭으로 연기한다.',
+      'AI임을 드러내지 말고 한국어로 답하라.'
+    );
+  } else if (multi) {
     lines.push(
       '너는 아래 세계관 속 이야기를 이끄는 내레이터이자, 등장인물 전원을 연기하는 롤플레이 상대다.',
       '상황을 서술하고, 등장인물의 대사는 반드시 "이름: 대사" 형식으로 표기하라(누가 말하는지 명확히).',
@@ -189,7 +197,9 @@ function buildSystemPrompt(def, lengthOverride) {
       '너는 아래에 정의된 캐릭터를 연기하는 롤플레이 상대다. 캐릭터로서 1인칭으로 자연스럽게 대화하라.'
     );
   }
-  lines.push('네가 AI/언어모델/시스템임을 드러내지 말고, 설정과 말투를 일관되게 유지하라. 특별한 지시가 없으면 한국어로, 몰입감 있게 답하라.');
+  if (!compact) {
+    lines.push('네가 AI/언어모델/시스템임을 드러내지 말고, 설정과 말투를 일관되게 유지하라. 특별한 지시가 없으면 한국어로, 몰입감 있게 답하라.');
+  }
 
   if (d.worldTitle) lines.push(`\n[제목]\n${d.worldTitle}`);
   if (d.worldLore) lines.push(`\n[세계관 설정]\n${d.worldLore}`);
@@ -204,17 +214,25 @@ function buildSystemPrompt(def, lengthOverride) {
   const imgs = (d.images || []).filter((im) => im.tag);
   if (imgs.length) {
     lines.push(
-      '\n[사용할 수 있는 이미지]\n' +
-        imgs.map((im) => `- ${im.tag}${im.description ? `: ${im.description}` : ''}`).join('\n') +
-        '\n이번 응답의 배경·장소·상황이 위 목록 중 하나와 맞으면 [img:태그] 를 정확히 한 번 넣어라(예: [img:밤바다]).' +
-        ' 특히 장소를 옮기거나 그 장소를 처음 묘사할 때는 반드시 넣어라.' +
-        ' 위 목록에 없는 태그는 절대 지어내지 마라. 정말 맞는 것이 하나도 없을 때만 생략한다.'
+      compact
+        ? '\n[이미지 태그]\n' +
+            imgs.map((im) => `- ${im.tag}`).join('\n') +
+            '\n장소가 맞으면 [img:태그]를 한 번 넣어라. 목록에 없는 태그는 쓰지 마라.'
+        : '\n[사용할 수 있는 이미지]\n' +
+            imgs.map((im) => `- ${im.tag}${im.description ? `: ${im.description}` : ''}`).join('\n') +
+            '\n이번 응답의 배경·장소·상황이 위 목록 중 하나와 맞으면 [img:태그] 를 정확히 한 번 넣어라(예: [img:밤바다]).' +
+            ' 특히 장소를 옮기거나 그 장소를 처음 묘사할 때는 반드시 넣어라.' +
+            ' 위 목록에 없는 태그는 절대 지어내지 마라. 정말 맞는 것이 하나도 없을 때만 생략한다.'
     );
   }
 
-  lines.push(
-    '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 장면 묘사는 서술로, 대사는 따옴표로.'
-  );
+  if (!compact) {
+    lines.push(
+      '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 장면 묘사는 서술로, 대사는 따옴표로.'
+    );
+  } else {
+    lines.push('\n사용자 캐릭터를 대신 조종하지 마라.');
+  }
   lines.push(`\n[응답 길이]\n${LENGTH_META[effectiveLength(d, lengthOverride)].instruction}`);
   return lines.join('\n');
 }
