@@ -149,16 +149,22 @@ function wireSocket() {
   });
 
   socket.on('narration', (entry) => {
-    renderLogEntry(entry);
-    scrollLog();
+    afterDice(() => {
+      renderLogEntry(entry);
+      scrollLog();
+    });
   });
   socket.on('dice', (entry) => animateDiceRoll(entry));
   socket.on('systemLog', (entry) => {
-    renderLogEntry(entry);
-    scrollLog();
+    afterDice(() => {
+      renderLogEntry(entry);
+      scrollLog();
+    });
   });
-  socket.on('stateUpdate', (character) => updateStatus(character));
-  socket.on('fieldUpdate', ({ enemies, companions }) => renderField(enemies, companions));
+  socket.on('stateUpdate', (character) => afterDice(() => updateStatus(character)));
+  socket.on('fieldUpdate', ({ enemies, companions }) =>
+    afterDice(() => renderField(enemies, companions))
+  );
   socket.on('gmThinking', ({ on }) => {
     thinkingEl.classList.toggle('hidden', !on);
     setBusy(on);
@@ -219,6 +225,9 @@ function updateGameModelLabel() {
 /** init/slotSwitched 공용: 한 게임의 전체 상태를 렌더. */
 function applyGameState(data) {
   prevHp = null;
+  // 주사위 보류 상태 초기화(다른 게임의 잔여 큐가 섞이지 않도록)
+  diceAnimating = false;
+  postDiceQueue.length = 0;
   currentGameAi = data.ai || currentGameAi;
   updateGameModelLabel();
   updateModelNote();
@@ -712,6 +721,18 @@ function dieFace(v) {
   return DIE_FACES[v >= 1 && v <= 6 ? v - 1 : 0];
 }
 
+// 주사위 굴리는 동안 결과(서사·경험치·상태)를 잠시 보류 → 착지 후 공개(스포일러 방지)
+let diceAnimating = false;
+const postDiceQueue = [];
+function afterDice(fn) {
+  if (diceAnimating) postDiceQueue.push(fn);
+  else fn();
+}
+function flushPostDice() {
+  diceAnimating = false;
+  while (postDiceQueue.length) postDiceQueue.shift()();
+}
+
 function renderLogEntry(entry) {
   if (entry.kind === 'dice') {
     // 저장 로그 재생: 주사위 눈 + 결과 (애니메이션 없이)
@@ -742,6 +763,7 @@ function animateDiceRoll(entry) {
   scrollLog();
   const faces = div.querySelectorAll('.die');
   const caption = div.querySelector('.dice-caption');
+  diceAnimating = true; // 착지할 때까지 이후 결과(서사·경험치)를 보류
   let ticks = 0;
   const iv = setInterval(() => {
     faces[0].textContent = dieFace(1 + Math.floor(Math.random() * 6));
@@ -756,6 +778,8 @@ function animateDiceRoll(entry) {
       if (entry.tier) div.classList.add('tier-' + entry.tier);
       caption.textContent = entry.text;
       scrollLog();
+      // 착지 후 짧은 여운 뒤에 보류해둔 결과를 공개
+      setTimeout(flushPostDice, 350);
     }
   }, 80);
 }
