@@ -84,6 +84,20 @@ async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }
   return textBlock.text;
 }
 
+// 캐릭터 챗: 구조화 없이 일반 텍스트 응답
+async function generateChat({ apiKey, model, system, messages }) {
+  const resp = await getClient(apiKey).messages.create({
+    model: model || DEFAULT_MODEL,
+    max_tokens: 1024,
+    thinking: { type: 'disabled' },
+    system: [{ type: 'text', text: system }],
+    messages,
+  });
+  const textBlock = resp.content.find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('Claude 응답에 텍스트 블록이 없습니다.');
+  return textBlock.text;
+}
+
 // 행동 제안: 문자열 배열 스키마
 const SUGGEST_SCHEMA = {
   type: 'object',
@@ -113,4 +127,4 @@ async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem,
   return JSON.stringify(obj.suggestions || []);
 }
 
-module.exports = { generate, generateSuggestions, DEFAULT_MODEL, name: 'anthropic' };
+module.exports = { generate, generateSuggestions, generateChat, DEFAULT_MODEL, name: 'anthropic' };

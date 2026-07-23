@@ -34,17 +34,18 @@ function toOpenAIMessages(system, messages) {
   ];
 }
 
-async function chat(baseURL, apiKey, model, defaultModel, systemText, messages) {
+async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, jsonMode = true) {
   let res;
   try {
+    const body = {
+      model: model || defaultModel,
+      messages: toOpenAIMessages(systemText, messages),
+    };
+    if (jsonMode) body.response_format = { type: 'json_object' };
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: model || defaultModel,
-        messages: toOpenAIMessages(systemText, messages),
-        response_format: { type: 'json_object' },
-      }),
+      body: JSON.stringify(body),
     });
   } catch (e) {
     throw new Error('네트워크 오류: ' + e.message);
@@ -98,6 +99,10 @@ function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
       } catch (_) {
         return '[]';
       }
+    },
+    // 캐릭터 챗: JSON 모드 없이 일반 텍스트
+    async generateChat({ apiKey, model, baseURL: cbu, system, messages }) {
+      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false);
     },
   };
 }

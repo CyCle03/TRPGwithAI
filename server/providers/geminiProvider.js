@@ -101,6 +101,18 @@ async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }
   return text;
 }
 
+// 캐릭터 챗: 구조화 없이 일반 텍스트 응답
+async function generateChat({ apiKey, model, system, messages }) {
+  const resp = await getClient(apiKey).models.generateContent({
+    model: model || DEFAULT_MODEL,
+    contents: toGeminiContents(messages),
+    config: { systemInstruction: system },
+  });
+  const text = resp.text;
+  if (!text) throw new Error('Gemini 응답이 비어 있습니다.');
+  return text;
+}
+
 // 행동 제안: 문자열 배열을 최상위 스키마로 반환
 const SUGGEST_SCHEMA = { type: Type.ARRAY, items: { type: Type.STRING } };
 
@@ -119,4 +131,4 @@ async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem,
   return text;
 }
 
-module.exports = { generate, generateSuggestions, DEFAULT_MODEL, name: 'gemini' };
+module.exports = { generate, generateSuggestions, generateChat, DEFAULT_MODEL, name: 'gemini' };

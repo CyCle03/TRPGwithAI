@@ -12,6 +12,8 @@ const { listClasses, STANDARD_ARRAY, STAT_KEYS } = require('./dungeonWorld');
 const aiGM = require('./aiGM');
 const auth = require('./auth');
 const store = require('./store');
+const chatStore = require('./chatStore');
+const chat = require('./chat');
 
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -187,6 +189,61 @@ function slotList(ug) {
       dead: !!s.game.dead,
       ai: { provider: s.ai.provider || 'gemini', model: s.ai.model || '' },
     })),
+  };
+}
+
+// ---------- 캐릭터 챗 (게임 슬롯과 별도) ----------
+const userChats = new Map(); // userId -> { activeId, chats:{id:{id, ai, persona, messages}} }
+
+function loadUserChats(userId, user) {
+  if (userChats.has(userId)) return userChats.get(userId);
+  const raw = chatStore.loadRaw(userId);
+  const chats = {};
+  if (raw && raw.chats) {
+    for (const [id, c] of Object.entries(raw.chats)) {
+      chats[id] = {
+        id,
+        ai: c.ai || defaultAiFor(user),
+        persona: c.persona || {},
+        messages: Array.isArray(c.messages) ? c.messages : [],
+      };
+    }
+  }
+  const activeId = raw && raw.activeId && chats[raw.activeId] ? raw.activeId : Object.keys(chats)[0] || null;
+  const uc = { activeId, chats };
+  userChats.set(userId, uc);
+  return uc;
+}
+
+function persistChats(userId, uc) {
+  const chats = {};
+  for (const [id, c] of Object.entries(uc.chats)) {
+    chats[id] = { id, ai: c.ai, persona: c.persona, messages: c.messages };
+  }
+  chatStore.save(userId, { activeId: uc.activeId, chats });
+}
+
+function chatListPayload(uc) {
+  return {
+    activeId: uc.activeId,
+    max: chatStore.MAX_CHATS,
+    chats: Object.values(uc.chats).map((c) => ({
+      id: c.id,
+      name: (c.persona && c.persona.name) || null,
+      configured: !!(c.persona && c.persona.name),
+      ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
+    })),
+  };
+}
+
+function chatStatePayload(c) {
+  if (!c) return null;
+  return {
+    chatId: c.id,
+    ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
+    persona: c.persona || {},
+    configured: !!(c.persona && c.persona.name),
+    messages: c.messages || [],
   };
 }
 
@@ -367,6 +424,115 @@ io.on('connection', (socket) => {
     persist(userId, ug);
     emit('gameModelUpdated', { provider: slot.ai.provider || 'gemini', model: slot.ai.model || '' });
     emit('slots', slotList(ug));
+  });
+
+  // ===== 캐릭터 챗 =====
+  const uc = loadUserChats(userId, user);
+  const activeChat = () => uc.chats[uc.activeId];
+  let chatBusy = false;
+
+  socket.on('chatInit', () => {
+    emit('chats', chatListPayload(uc));
+    emit('chatState', chatStatePayload(activeChat()));
+  });
+
+  socket.on('newChat', () => {
+    if (Object.keys(uc.chats).length >= chatStore.MAX_CHATS) {
+      return emit('error', { message: `캐릭터 챗은 최대 ${chatStore.MAX_CHATS}개까지 저장돼요.` });
+    }
+    const id = newId();
+    uc.chats[id] = { id, ai: defaultAiFor(user), persona: {}, messages: [] };
+    uc.activeId = id;
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(uc.chats[id]));
+    emit('chats', chatListPayload(uc));
+  });
+
+  socket.on('saveChatPersona', (payload) => {
+    const c = activeChat();
+    if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
+    const persona = chat.normalizePersona(payload && payload.persona);
+    if (!persona.name) return emit('error', { message: '캐릭터 이름은 필수입니다.' });
+    c.persona = persona;
+    // 첫 인사말을 대화 시작으로 시드(메시지가 비어 있을 때만)
+    if (!c.messages.length && persona.greeting) {
+      c.messages.push({ role: 'assistant', content: persona.greeting });
+    }
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(c));
+    emit('chats', chatListPayload(uc));
+  });
+
+  socket.on('switchChat', (payload) => {
+    const id = payload && payload.id;
+    if (!uc.chats[id]) return emit('error', { message: '없는 챗입니다.' });
+    uc.activeId = id;
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(uc.chats[id]));
+    emit('chats', chatListPayload(uc));
+  });
+
+  socket.on('deleteChat', (payload) => {
+    const id = payload && payload.id;
+    if (!uc.chats[id]) return;
+    delete uc.chats[id];
+    if (uc.activeId === id) uc.activeId = Object.keys(uc.chats)[0] || null;
+    persistChats(userId, uc);
+    emit('chats', chatListPayload(uc));
+    emit('chatState', chatStatePayload(activeChat()));
+  });
+
+  socket.on('setChatModel', (payload) => {
+    const c = activeChat();
+    if (!c) return;
+    const { provider, model } = payload || {};
+    if (aiGM.PROVIDER_NAMES.includes(provider)) c.ai.provider = provider;
+    if (typeof model === 'string') c.ai.model = model.trim().slice(0, 60);
+    persistChats(userId, uc);
+    emit('chatModelUpdated', { provider: c.ai.provider || 'gemini', model: c.ai.model || '' });
+    emit('chats', chatListPayload(uc));
+  });
+
+  socket.on('chatSend', async (payload) => {
+    const c = activeChat();
+    if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
+    if (!c.persona || !c.persona.name) return emit('error', { message: '먼저 캐릭터를 설정하세요.' });
+    if (chatBusy) return emit('error', { message: '응답 중입니다. 잠시만요.' });
+    const text = String((payload && payload.text) || '').trim();
+    if (!text) return;
+
+    const provider = c.ai.provider || 'gemini';
+    const cfg = auth.getAiConfig(userId, provider);
+    if (provider === 'custom') {
+      if (!cfg.baseURL) return emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
+    } else if (!cfg.apiKey) {
+      return emit('error', { message: `현재 챗의 제공자(${provider}) API 키가 없습니다. ⚙ 설정에서 등록하세요.` });
+    }
+
+    c.messages.push({ role: 'user', content: text }); // 사용자 메시지는 클라가 즉시 렌더
+    chatBusy = true;
+    emit('chatThinking', { on: true });
+    try {
+      const system = chat.buildSystemPrompt(c.persona);
+      const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
+      const reply = await aiGM.chatReply(
+        { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL },
+        system,
+        recent
+      );
+      const clean = String(reply || '').trim();
+      c.messages.push({ role: 'assistant', content: clean });
+      emit('chatMessage', { role: 'assistant', content: clean });
+    } catch (e) {
+      console.error(e);
+      c.messages.pop(); // 실패 시 방금 넣은 사용자 메시지 롤백(재전송 가능)
+      emit('error', { message: '응답 실패: ' + e.message });
+      emit('chatRollback', {});
+    } finally {
+      chatBusy = false;
+      emit('chatThinking', { on: false });
+      persistChats(userId, uc);
+    }
   });
 });
 

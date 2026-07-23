@@ -14,6 +14,10 @@
 
     <!-- 우측 상단 사용자 바 (로그인 후) -->
     <div id="userBar" class="user-bar hidden">
+      <div class="mode-toggle">
+        <button id="modeGameBtn" class="mode-btn active" title="AI GM 던전월드">🎲 게임</button>
+        <button id="modeChatBtn" class="mode-btn" title="캐릭터 챗">💬 챗</button>
+      </div>
       <span id="userName"></span>
       <button id="settingsBtn" class="ghost" title="설정">⚙ 설정</button>
       <button id="logoutBtn" class="ghost">로그아웃</button>
@@ -172,6 +176,51 @@
 
         <div class="model-note" id="modelNote"></div>
       </aside>
+    </div>
+
+    <!-- 캐릭터 챗: 설정 화면 (character.ai식 리치) -->
+    <div id="chatSetup" class="setup hidden">
+      <div class="setup-card">
+        <h1 id="chatSetupTitle">💬 캐릭터 만들기</h1>
+        <p class="subtitle">설정을 직접 입력해 나만의 캐릭터와 대화하세요. * 는 필수.</p>
+        <label>캐릭터 이름 *</label>
+        <input id="cpName" type="text" maxlength="60" placeholder="예: 루나" />
+        <label>캐릭터 설명 · 성격 · 말투 · 배경 *</label>
+        <textarea id="cpDescription" rows="5" placeholder="성격, 말투, 외형, 배경 등 캐릭터를 자세히 설명하세요."></textarea>
+        <label>상황 / 시나리오 <span class="opt">(선택)</span></label>
+        <textarea id="cpScenario" rows="3" placeholder="지금 어떤 상황인지, 어디서 만나는지 등"></textarea>
+        <label>예시 대화 <span class="opt">(선택 · 말투 참고용)</span></label>
+        <textarea id="cpExample" rows="3" placeholder="루나: ...흥, 또 너야?&#10;나: 안녕 루나."></textarea>
+        <label>첫 인사말 <span class="opt">(선택)</span></label>
+        <textarea id="cpGreeting" rows="2" placeholder="대화 시작 시 캐릭터가 먼저 건네는 말"></textarea>
+        <label>내 페르소나 <span class="opt">(선택)</span></label>
+        <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
+        <div id="chatSetupError" class="auth-error hidden"></div>
+        <div class="wizard-nav">
+          <button id="cpCancel" class="ghost">취소</button>
+          <button id="cpSave" class="primary">저장하고 대화 시작</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 캐릭터 챗: 대화 화면 -->
+    <div id="chat" class="chat-screen hidden">
+      <main class="log-pane">
+        <header class="log-header">
+          <div id="chatBar" class="slot-bar"></div>
+          <div class="header-actions">
+            <button id="chatModelBtn" class="ghost" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
+            <button id="chatEditBtn" class="ghost" title="캐릭터 설정 편집">✎ 설정</button>
+            <button id="newChatBtn" class="ghost" title="새 캐릭터 만들기">＋ 새 캐릭터</button>
+          </div>
+        </header>
+        <div id="chatLog" class="log"><div id="chatLogInner" class="log-inner"></div></div>
+        <div id="chatThinking" class="thinking hidden">입력 중…</div>
+        <form id="chatForm" class="input-bar">
+          <input id="chatInput" type="text" placeholder="메시지를 입력하세요…" autocomplete="off" />
+          <button type="submit" class="primary" id="chatSendBtn">전송</button>
+        </form>
+      </main>
     </div>
 
     <!-- 레벨업 선택 모달 -->

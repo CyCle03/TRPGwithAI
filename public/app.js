@@ -92,11 +92,45 @@ const gmCancelBtn = document.getElementById('gmCancel');
 const gmSaveBtn = document.getElementById('gmSave');
 const gameModelErrorEl = document.getElementById('gameModelError');
 
+// 모드 토글 + 캐릭터 챗
+const modeGameBtn = document.getElementById('modeGameBtn');
+const modeChatBtn = document.getElementById('modeChatBtn');
+const chatSetupEl = document.getElementById('chatSetup');
+const chatEl = document.getElementById('chat');
+const chatBarEl = document.getElementById('chatBar');
+const chatModelBtn = document.getElementById('chatModelBtn');
+const chatModelLabelEl = document.getElementById('chatModelLabel');
+const chatEditBtn = document.getElementById('chatEditBtn');
+const newChatBtn = document.getElementById('newChatBtn');
+const chatLogEl = document.getElementById('chatLog');
+const chatLogInnerEl = document.getElementById('chatLogInner');
+const chatThinkingEl = document.getElementById('chatThinking');
+const chatForm = document.getElementById('chatForm');
+const chatInput = document.getElementById('chatInput');
+const chatSendBtn = document.getElementById('chatSendBtn');
+// 챗 설정 폼
+const cpNameEl = document.getElementById('cpName');
+const cpDescriptionEl = document.getElementById('cpDescription');
+const cpScenarioEl = document.getElementById('cpScenario');
+const cpExampleEl = document.getElementById('cpExample');
+const cpGreetingEl = document.getElementById('cpGreeting');
+const cpUserPersonaEl = document.getElementById('cpUserPersona');
+const chatSetupErrorEl = document.getElementById('chatSetupError');
+const cpCancelBtn = document.getElementById('cpCancel');
+const cpSaveBtn = document.getElementById('cpSave');
+
 let authMode = 'login'; // 'login' | 'signup'
 let mySettings = null; // {provider, model, baseURL, keys:{provider:bool}}
 let defaultModels = { gemini: '', anthropic: '' };
 let currentGameAi = { provider: 'gemini', model: '' }; // 활성 게임의 모델
 let providersList = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'];
+let currentMode = 'gm'; // 'gm' | 'chat'
+let gmHasCharacter = false; // 게임 모드 화면 결정용
+let currentChat = null; // 활성 챗 상태 {chatId, persona, configured, messages, ai}
+let currentChatAi = { provider: 'gemini', model: '' };
+let modelModalContext = 'gm'; // 모델 모달이 게임용인지 챗용인지
+let chatBusy = false;
+let chatInited = false; // 챗 데이터 최초 로드 여부
 
 // 위저드 상태
 let classesData = [];
@@ -124,6 +158,12 @@ function wireSocket() {
     if (Array.isArray(data.providers)) providersList = data.providers;
     if (data.username) userNameEl.textContent = data.username;
     userBarEl.classList.remove('hidden');
+    // 모드/챗 상태 초기화(재접속·계정 전환 대비)
+    currentMode = 'gm';
+    chatInited = false;
+    currentChat = null;
+    modeGameBtn.classList.add('active');
+    modeChatBtn.classList.remove('active');
     classesData = data.classes || [];
     if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
     if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
@@ -147,6 +187,23 @@ function wireSocket() {
     updateGameModelLabel();
     updateModelNote();
   });
+
+  // ===== 캐릭터 챗 =====
+  socket.on('chats', (data) => renderChatBar(data));
+  socket.on('chatState', (data) => applyChatState(data));
+  socket.on('chatMessage', (m) => {
+    appendChatMsg(m.role, m.content);
+    scrollChat();
+  });
+  socket.on('chatThinking', ({ on }) => {
+    chatThinkingEl.classList.toggle('hidden', !on);
+    setChatBusy(on);
+  });
+  socket.on('chatModelUpdated', (ai) => {
+    currentChatAi = ai || currentChatAi;
+    updateChatModelLabel();
+  });
+  socket.on('chatRollback', () => removeLastChatUserMsg());
 
   socket.on('narration', (entry) => {
     afterDice(() => {
@@ -233,8 +290,8 @@ function applyGameState(data) {
   updateModelNote();
   closeLevelUp();
   clearSuggestions();
+  gmHasCharacter = !!data.hasCharacter;
   if (data.hasCharacter) {
-    showGame();
     if (data.character) updateStatus(data.character);
     renderField(data.enemies || [], data.companions || []);
     logInnerEl.innerHTML = '';
@@ -242,10 +299,11 @@ function applyGameState(data) {
     scrollLog();
     setGameOver(!!data.dead);
     if (data.pendingLevelUp) openLevelUp(data.pendingLevelUp);
+    if (currentMode === 'gm') showGame();
   } else {
     setGameOver(false);
     resetWizard();
-    showSetup();
+    if (currentMode === 'gm') showSetup();
   }
 }
 
@@ -288,6 +346,123 @@ function renderSlots(data) {
   newGameBtn.title = full ? `게임은 최대 ${data.max || 3}개까지 저장됩니다` : '새 게임 슬롯 만들기';
 }
 
+// ---------- 캐릭터 챗 ----------
+function updateChatModelLabel() {
+  const prov = currentChatAi.provider || 'gemini';
+  const model = currentChatAi.model || defaultModels[prov] || '기본';
+  chatModelLabelEl.textContent = `${PROVIDER_LABELS[prov] || prov} · ${model}`;
+  chatModelBtn.classList.toggle('warn', !providerReady(prov));
+}
+
+function setChatBusy(busy) {
+  chatBusy = busy;
+  chatSendBtn.disabled = busy;
+  chatInput.disabled = busy;
+  if (!busy) chatInput.focus();
+}
+
+function scrollChat() {
+  chatLogEl.scrollTop = chatLogEl.scrollHeight;
+}
+
+/** 챗 메시지 버블 추가. role: 'user' | 'assistant'. */
+function appendChatMsg(role, content) {
+  const div = document.createElement('div');
+  div.className = 'entry ' + (role === 'user' ? 'player' : 'gm');
+  div.textContent = content;
+  chatLogInnerEl.appendChild(div);
+}
+
+/** 응답 실패 시 방금 보낸 사용자 버블 제거(재전송 가능). */
+function removeLastChatUserMsg() {
+  const kids = chatLogInnerEl.querySelectorAll('.entry.player');
+  const last = kids[kids.length - 1];
+  if (last) last.remove();
+}
+
+/** 챗 목록 칩 렌더. */
+function renderChatBar(data) {
+  if (!data || !chatBarEl) return;
+  chatBarEl.innerHTML = '';
+  (data.chats || []).forEach((c) => {
+    const chip = document.createElement('div');
+    chip.className = 'slot-chip' + (c.id === data.activeId ? ' active' : '');
+    const btn = document.createElement('button');
+    btn.className = 'slot-main';
+    btn.textContent = c.configured ? c.name : '설정 안 된 캐릭터';
+    btn.title = '이 캐릭터로 전환';
+    btn.addEventListener('click', () => {
+      if (c.id !== data.activeId) socket.emit('switchChat', { id: c.id });
+    });
+    chip.appendChild(btn);
+    if ((data.chats || []).length > 1) {
+      const del = document.createElement('button');
+      del.className = 'slot-del';
+      del.textContent = '✕';
+      del.title = '이 캐릭터 삭제';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`"${c.name || '이 캐릭터'}"을(를) 삭제할까요? 대화도 함께 지워집니다.`)) {
+          socket.emit('deleteChat', { id: c.id });
+        }
+      });
+      chip.appendChild(del);
+    }
+    chatBarEl.appendChild(chip);
+  });
+  const full = (data.chats || []).length >= (data.max || 12);
+  newChatBtn.disabled = full;
+  newChatBtn.title = full ? `캐릭터는 최대 ${data.max || 12}개까지 저장됩니다` : '새 캐릭터 만들기';
+}
+
+/** 활성 챗 상태를 반영. data가 null이면 챗 없음. */
+function applyChatState(data) {
+  currentChat = data;
+  if (data) {
+    currentChatAi = data.ai || currentChatAi;
+    updateChatModelLabel();
+  }
+  if (currentMode !== 'chat') return; // 챗 모드일 때만 화면 전환
+  if (!data) {
+    // 챗이 하나도 없음 → 새로 하나 만들어 설정 폼으로
+    socket.emit('newChat');
+    return;
+  }
+  if (!data.configured) {
+    openChatSetupForm(data);
+  } else {
+    chatLogInnerEl.innerHTML = '';
+    (data.messages || []).forEach((m) => appendChatMsg(m.role, m.content));
+    setChatBusy(false);
+    showChat();
+    scrollChat();
+  }
+}
+
+/** 챗 설정 폼을 현재 페르소나로 채우고 표시(편집/신규 공용). */
+function openChatSetupForm(data) {
+  const p = (data && data.persona) || {};
+  cpNameEl.value = p.name || '';
+  cpDescriptionEl.value = p.description || '';
+  cpScenarioEl.value = p.scenario || '';
+  cpExampleEl.value = p.exampleDialogue || '';
+  cpGreetingEl.value = p.greeting || '';
+  cpUserPersonaEl.value = p.userPersona || '';
+  chatSetupErrorEl.classList.add('hidden');
+  showChatSetup();
+}
+
+function collectPersona() {
+  return {
+    name: cpNameEl.value.trim(),
+    description: cpDescriptionEl.value.trim(),
+    scenario: cpScenarioEl.value.trim(),
+    exampleDialogue: cpExampleEl.value.trim(),
+    greeting: cpGreetingEl.value.trim(),
+    userPersona: cpUserPersonaEl.value.trim(),
+  };
+}
+
 // ---------- 화면 전환 ----------
 const bgVideo = document.getElementById('bgVideo');
 // 랜딩 배경 앰비언트 클립 4종 — 접속(로드)마다 랜덤 1개 선택.
@@ -303,24 +478,53 @@ function setLandingBg(on) {
   if (on) bgVideo.play().catch(() => {});
   else bgVideo.pause();
 }
+function hideAllScreens() {
+  [authEl, setupEl, gameEl, chatSetupEl, chatEl].forEach((e) => e && e.classList.add('hidden'));
+}
 function showAuth() {
+  hideAllScreens();
   authEl.classList.remove('hidden');
-  setupEl.classList.add('hidden');
-  gameEl.classList.add('hidden');
   userBarEl.classList.add('hidden');
   setLandingBg(true);
 }
 function showSetup() {
-  authEl.classList.add('hidden');
+  hideAllScreens();
   setupEl.classList.remove('hidden');
-  gameEl.classList.add('hidden');
   setLandingBg(true);
 }
 function showGame() {
-  authEl.classList.add('hidden');
-  setupEl.classList.add('hidden');
+  hideAllScreens();
   gameEl.classList.remove('hidden');
   setLandingBg(false);
+}
+function showChatSetup() {
+  hideAllScreens();
+  chatSetupEl.classList.remove('hidden');
+  setLandingBg(true);
+}
+function showChat() {
+  hideAllScreens();
+  chatEl.classList.remove('hidden');
+  setLandingBg(false);
+}
+
+/** 게임 ↔ 챗 모드 전환. */
+function setMode(mode) {
+  currentMode = mode;
+  modeGameBtn.classList.toggle('active', mode === 'gm');
+  modeChatBtn.classList.toggle('active', mode === 'chat');
+  if (mode === 'gm') {
+    if (gmHasCharacter) showGame();
+    else showSetup();
+  } else {
+    // 챗 데이터는 처음 진입할 때 로드(지연). 이후엔 현재 상태로 화면 전환.
+    if (!chatInited) {
+      chatInited = true;
+      socket.emit('chatInit');
+    } else {
+      applyChatState(currentChat);
+    }
+  }
 }
 
 // ---------- 캐릭터 생성 (위저드) ----------
@@ -635,11 +839,13 @@ newGameBtn.addEventListener('click', () => {
   socket.emit('newGame'); // 기존 게임 유지 + 새 슬롯 생성
 });
 
-// --- 이 게임의 AI 모델 모달 ---
-function openGameModel() {
+// --- AI 모델 모달 (게임/챗 공용) ---
+function openModelModal(context) {
+  modelModalContext = context;
+  const ai = context === 'chat' ? currentChatAi : currentGameAi;
   gameModelErrorEl.classList.add('hidden');
-  gmProviderEl.value = currentGameAi.provider || 'gemini';
-  gmModelEl.value = currentGameAi.model || '';
+  gmProviderEl.value = ai.provider || 'gemini';
+  gmModelEl.value = ai.model || '';
   updateGameModelHint();
   gameModelModal.classList.remove('hidden');
 }
@@ -652,12 +858,60 @@ function updateGameModelHint() {
     ? `${pname} 키 등록됨 ✓`
     : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
 }
-gameModelBtn.addEventListener('click', openGameModel);
+gameModelBtn.addEventListener('click', () => openModelModal('gm'));
+chatModelBtn.addEventListener('click', () => openModelModal('chat'));
 gmProviderEl.addEventListener('change', updateGameModelHint);
 gmCancelBtn.addEventListener('click', () => gameModelModal.classList.add('hidden'));
 gmSaveBtn.addEventListener('click', () => {
-  socket.emit('setGameModel', { provider: gmProviderEl.value, model: gmModelEl.value.trim() });
+  const payload = { provider: gmProviderEl.value, model: gmModelEl.value.trim() };
+  socket.emit(modelModalContext === 'chat' ? 'setChatModel' : 'setGameModel', payload);
   gameModelModal.classList.add('hidden');
+});
+
+// --- 모드 토글 + 챗 버튼/폼 ---
+modeGameBtn.addEventListener('click', () => setMode('gm'));
+modeChatBtn.addEventListener('click', () => setMode('chat'));
+newChatBtn.addEventListener('click', () => {
+  if (newChatBtn.disabled) return;
+  socket.emit('newChat');
+});
+chatEditBtn.addEventListener('click', () => {
+  if (currentChat) openChatSetupForm(currentChat);
+});
+cpCancelBtn.addEventListener('click', () => {
+  // 설정 안 된 새 캐릭터를 취소하면 삭제하고 게임 모드로, 편집 취소면 대화로 복귀
+  if (currentChat && !currentChat.configured) {
+    socket.emit('deleteChat', { id: currentChat.chatId });
+    setMode('gm');
+  } else if (currentChat && currentChat.configured) {
+    showChat();
+  } else {
+    setMode('gm');
+  }
+});
+cpSaveBtn.addEventListener('click', () => {
+  const persona = collectPersona();
+  if (!persona.name) {
+    chatSetupErrorEl.textContent = '캐릭터 이름은 필수입니다.';
+    chatSetupErrorEl.classList.remove('hidden');
+    return;
+  }
+  if (!persona.description) {
+    chatSetupErrorEl.textContent = '캐릭터 설명을 입력하세요.';
+    chatSetupErrorEl.classList.remove('hidden');
+    return;
+  }
+  chatSetupErrorEl.classList.add('hidden');
+  socket.emit('saveChatPersona', { persona });
+});
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text || chatBusy) return;
+  chatInput.value = '';
+  appendChatMsg('user', text); // 사용자 메시지 즉시 표시
+  scrollChat();
+  socket.emit('chatSend', { text });
 });
 
 let gameOver = false;

@@ -229,4 +229,21 @@ function normalize(parsed) {
   };
 }
 
-module.exports = { callGM, suggestGmActions, defaultModel, PROVIDER_NAMES };
+/**
+ * 캐릭터 챗(자유 롤플레이) 응답 — 구조화 없이 일반 텍스트.
+ * @param {{provider:string, model:string, apiKey:string, baseURL:string}} cfg
+ * @param {string} system  캐릭터 설정 시스템 프롬프트
+ * @param {Array}  messages [{role, content}]
+ * @returns {Promise<string>}
+ */
+async function chatReply(cfg, system, messages) {
+  return pickProvider(cfg.provider).generateChat({
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    baseURL: cfg.baseURL,
+    system,
+    messages,
+  });
+}
+
+module.exports = { callGM, suggestGmActions, chatReply, defaultModel, PROVIDER_NAMES };
