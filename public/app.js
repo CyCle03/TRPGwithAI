@@ -1094,7 +1094,10 @@ function openModelModal(context) {
   gmLengthRowEl.classList.toggle('hidden', !isChat);
   if (isChat) {
     const rec = (currentChat && currentChat.responseLength) || 'medium';
-    const recLabel = { short: '짧게', medium: '보통', long: '길게' }[rec] || rec;
+    const recLabel =
+      { veryshort: '아주 짧게', short: '짧게', medium: '보통', long: '길게', verylong: '아주 길게' }[
+        rec
+      ] || rec;
     gmLengthEl.options[0].textContent = `제작자 권장 따르기 (${recLabel})`;
     gmLengthEl.value = (currentChat && currentChat.lengthOverride) || '';
   }

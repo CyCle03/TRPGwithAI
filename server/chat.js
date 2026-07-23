@@ -21,23 +21,38 @@ const IMG_MARKER_RE = /\[img:\s*([^\]]{1,60})\]/i;
  * 응답 길이(출력량). 제작자가 def.responseLength로 권장값을 정하고,
  * 플레이어는 자기 대화에서 따로 덮어쓸 수 있다.
  */
-const LENGTHS = ['short', 'medium', 'long'];
+// 5단계. 크랙(롤플레이 응답 260~300단어가 통용) ~ 제타(모바일 채팅형 짧은 응답)의
+// 실제 사용 범위를 양끝으로 잡아 calibration 했다.
+// maxTokens는 지시한 분량이 잘리지 않도록 목표보다 넉넉하게 준다.
+const LENGTHS = ['veryshort', 'short', 'medium', 'long', 'verylong'];
 const LENGTH_META = {
+  veryshort: {
+    label: '아주 짧게',
+    instruction:
+      '응답은 1~2문장으로 아주 짧게. 메신저로 툭 던지듯 간결하게. 장황한 묘사는 넣지 마라.',
+    maxTokens: 250,
+  },
   short: {
     label: '짧게',
-    instruction: '응답은 2~3문장으로 짧고 간결하게. 군더더기 없이 핵심만.',
-    maxTokens: 320,
+    instruction: '응답은 2~4문장으로 짧게. 군더더기 없이 핵심만.',
+    maxTokens: 500,
   },
   medium: {
     label: '보통',
-    instruction: '응답은 4~6문장 정도로. 장면 묘사와 대사를 적절히 섞어라.',
-    maxTokens: 700,
+    instruction: '응답은 1~2문단(4~6문장) 정도로. 장면 묘사와 대사를 적절히 섞어라.',
+    maxTokens: 900,
   },
   long: {
     label: '길게',
     instruction:
-      '응답은 여러 문단으로 풍부하게. 장면과 분위기를 충분히 묘사하고 대사도 넉넉히 넣어라.',
-    maxTokens: 1500,
+      '응답은 3~4문단으로 충분히. 장면·분위기·감정 묘사를 풍부하게 하고 대사도 넉넉히 넣어라.',
+    maxTokens: 1600,
+  },
+  verylong: {
+    label: '아주 길게',
+    instruction:
+      '응답은 250~300단어 분량의 긴 서사로. 장면·심리·대사를 소설처럼 깊이 있게 전개하되, 300단어를 넘기지는 마라.',
+    maxTokens: 2500,
   },
 };
 
