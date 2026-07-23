@@ -275,6 +275,7 @@ function loadUserChats(userId, user) {
         publishedId: c.publishedId || null, // 내가 공개한 항목 id
         sourceId: c.sourceId || null, // 갤러리에서 가져온 원본
         sourceOwner: c.sourceOwner || null,
+        sourceOwnerId: c.sourceOwnerId || null, // 원작자 id (수정 차단 판단용)
       };
     }
   }
@@ -296,6 +297,7 @@ function persistChats(userId, uc) {
       publishedId: c.publishedId || null,
       sourceId: c.sourceId || null,
       sourceOwner: c.sourceOwner || null,
+      sourceOwnerId: c.sourceOwnerId || null,
     };
   }
   chatStore.save(userId, { activeId: uc.activeId, chats });
@@ -314,6 +316,11 @@ function chatListPayload(uc) {
   };
 }
 
+/** 남이 만든 세계관을 가져온 대화인가(정의 수정·재공개 금지). */
+function isBorrowed(c, userId) {
+  return !!(c && c.sourceOwnerId && c.sourceOwnerId !== userId);
+}
+
 function chatStatePayload(c, ownerId) {
   if (!c) return null;
   const entry = c.publishedId ? publish.get(c.publishedId, ownerId) : null;
@@ -327,6 +334,7 @@ function chatStatePayload(c, ownerId) {
     lengthOverride: c.lengthOverride || null, // 플레이어 설정(null=권장 따름)
     published: entry ? { id: entry.id, visibility: entry.visibility, plays: entry.plays || 0 } : null,
     source: c.sourceId ? { id: c.sourceId, ownerName: c.sourceOwner } : null,
+    readOnly: isBorrowed(c, ownerId), // 남의 세계관 → 정의 수정 불가
   };
 }
 
@@ -535,6 +543,11 @@ io.on('connection', (socket) => {
   socket.on('saveChatDef', (payload) => {
     const c = activeChat();
     if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
+    if (isBorrowed(c, userId)) {
+      return emit('error', {
+        message: `이 세계관은 ${c.sourceOwner || '다른 사용자'}님이 만든 것이라 수정할 수 없습니다.`,
+      });
+    }
     const def = chat.normalizeDef(payload && payload.def);
     if (!chat.isConfigured(def)) return emit('error', { message: '이름 있는 캐릭터가 최소 1명 필요합니다.' });
     c.def = def;
@@ -600,6 +613,9 @@ io.on('connection', (socket) => {
     const c = activeChat();
     if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
     if (!chat.isConfigured(c.def)) return emit('error', { message: '먼저 캐릭터를 설정하세요.' });
+    if (isBorrowed(c, userId)) {
+      return emit('error', { message: '가져온 세계관은 내 것으로 다시 공개할 수 없습니다.' });
+    }
     const visibility = (payload && payload.visibility) || 'public';
     try {
       const entry = publish.publish({
@@ -635,6 +651,21 @@ io.on('connection', (socket) => {
     emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
   });
 
+  // 갤러리의 '내가 공개한 것'에서 바로 공개 중단(연결된 챗이 없어도 가능)
+  socket.on('unpublishById', (payload) => {
+    try {
+      publish.unpublish(payload && payload.id, userId);
+    } catch (e) {
+      return emit('error', { message: e.message });
+    }
+    // 이 항목과 연결된 내 챗이 있으면 연결 해제
+    Object.values(uc.chats).forEach((c) => {
+      if (c.publishedId === (payload && payload.id)) c.publishedId = null;
+    });
+    persistChats(userId, uc);
+    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+  });
+
   // 갤러리 항목을 내 대화로 가져와 플레이 (정의는 복사, 대화는 각자 별도)
   socket.on('playPublished', (payload) => {
     const entry = publish.get(payload && payload.id, userId);
@@ -649,9 +680,11 @@ io.on('connection', (socket) => {
       ai: defaultAiFor(user),
       def,
       messages: def.greeting ? [{ role: 'assistant', content: def.greeting }] : [],
-      publishedId: null,
+      // 내가 만든 걸 내가 플레이하면 공개 항목과 연결(수정 시 갤러리도 갱신)
+      publishedId: entry.ownerId === userId ? entry.id : null,
       sourceId: entry.id,
       sourceOwner: entry.ownerName,
+      sourceOwnerId: entry.ownerId,
     };
     uc.activeId = cid;
     if (entry.ownerId !== userId) publish.bumpPlays(entry.id);

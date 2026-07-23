@@ -488,6 +488,8 @@ function applyChatState(data) {
     chatLogInnerEl.innerHTML = '';
     (data.messages || []).forEach((m) => appendChatMsg(m.role, m.content, m.imageId));
     setChatBusy(false);
+    // 남이 만든 세계관은 설정을 수정할 수 없음 → 편집 버튼 숨김
+    chatEditBtn.classList.toggle('hidden', !!data.readOnly);
     showChat();
     scrollChat();
   }
@@ -575,6 +577,17 @@ function renderGalleryList(el, items, mine) {
     play.textContent = '플레이';
     play.addEventListener('click', () => socket.emit('playPublished', { id: it.id }));
     card.appendChild(play);
+    if (mine) {
+      const un = document.createElement('button');
+      un.className = 'ghost gi-play';
+      un.textContent = '공개 중단';
+      un.addEventListener('click', () => {
+        if (confirm(`"${it.title}" 공개를 중단할까요? 갤러리에서 사라집니다.`)) {
+          socket.emit('unpublishById', { id: it.id });
+        }
+      });
+      card.appendChild(un);
+    }
     el.appendChild(card);
   });
 }

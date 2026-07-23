@@ -4,6 +4,7 @@ const path = require('path');
 const publish = require('./publish');
 const chat = require('./chat');
 const uploads = require('./uploads');
+const auth = require('./auth');
 
 /** 저장소에 포함된 샘플 이미지 → 고정 id로 등록해 정의에 넣는다. */
 const SAMPLE_IMAGES = [
@@ -41,6 +42,9 @@ const SAMPLE_IMAGES = [
 
 const SEED_KEY = 'sampleV1';
 const IMAGE_SEED_KEY = 'sampleImagesV1';
+const OWNER_SEED_KEY = 'sampleOwnerV1';
+// 샘플을 넘겨줄 실제 계정 아이디 (.env의 SAMPLE_OWNER로 변경 가능)
+const SAMPLE_OWNER = process.env.SAMPLE_OWNER || 'elcher';
 
 const SAMPLE_DEF = {
   worldTitle: '잿빛 항구, 세이렌',
@@ -101,9 +105,14 @@ function importSampleImages() {
 }
 
 function seed() {
-  try {
-    importSampleImages(); // 파일은 매번 확인(없으면 복사, 있으면 건너뜀)
+  importSampleImages(); // 파일은 매번 확인(없으면 복사, 있으면 건너뜀)
+  ensureSampleEntry(); // 등록 / 이미지 back-fill
+  transferSampleOwner(); // 실제 계정으로 소유권 이관
+}
 
+/** 샘플 공개 항목을 등록하거나, 이미지가 빠져 있으면 채운다. */
+function ensureSampleEntry() {
+  try {
     // 1) 최초 등록
     if (!publish.hasSeed(SEED_KEY)) {
       const def = chat.normalizeDef(SAMPLE_DEF);
@@ -139,6 +148,22 @@ function seed() {
     console.log('🖼️  샘플 세계관에 이미지', def.images.length, '장을 추가했습니다.');
   } catch (e) {
     console.error('갤러리 샘플 등록 실패:', e.message);
+  }
+}
+
+/** 샘플의 소유자를 '__sample__' → 실제 계정으로 이관(계정이 생긴 뒤 최초 1회). */
+function transferSampleOwner() {
+  try {
+    if (publish.hasSeed(OWNER_SEED_KEY)) return;
+    const owned = publish.listMine('__sample__');
+    if (!owned.length) return;
+    const user = auth.findByUsername(SAMPLE_OWNER);
+    if (!user) return; // 계정이 아직 없으면 다음 기동 때 재시도
+    owned.forEach((s) => publish.transferOwner(s.id, user.id, user.username));
+    publish.markSeed(OWNER_SEED_KEY);
+    console.log(`👤 샘플 세계관 소유자를 '${user.username}' 계정으로 이관했습니다.`);
+  } catch (e) {
+    console.error('샘플 소유자 이관 실패:', e.message);
   }
 }
 

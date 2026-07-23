@@ -156,6 +156,14 @@ function verifyLogin(username, password) {
   return publicUser(u);
 }
 
+/** 아이디(사용자명)로 사용자 조회. 없으면 null. */
+function findByUsername(name) {
+  const db = loadUsers();
+  const id = db.byName[String(name || '').trim().toLowerCase()];
+  const u = id ? db.users[id] : null;
+  return u ? { id: u.id, username: u.username } : null;
+}
+
 function getUserById(id) {
   const db = loadUsers();
   const u = db.users[id];
@@ -242,6 +250,7 @@ function publicUser(u) {
 module.exports = {
   createUser,
   verifyLogin,
+  findByUsername,
   getUserById,
   getAiConfig,
   updateSettings,

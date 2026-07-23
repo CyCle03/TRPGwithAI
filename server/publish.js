@@ -134,6 +134,18 @@ function bumpPlays(pubId) {
   saveAll(db);
 }
 
+/** 공개 항목의 소유자를 변경한다(샘플 → 실제 계정 이관용). */
+function transferOwner(pubId, newOwnerId, newOwnerName) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) return null;
+  e.ownerId = newOwnerId;
+  e.ownerName = newOwnerName;
+  e.updatedAt = new Date().toISOString();
+  saveAll(db);
+  return e;
+}
+
 /** 시딩 중복 방지 플래그 (한 번 등록 후 사용자가 지우면 다시 생기지 않음). */
 function hasSeed(key) {
   const db = loadAll();
@@ -153,6 +165,7 @@ module.exports = {
   listMine,
   get,
   bumpPlays,
+  transferOwner,
   hasSeed,
   markSeed,
   VISIBILITIES,
