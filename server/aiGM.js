@@ -14,12 +14,34 @@ const { makeProvider } = require('./providers/openaiCompatProvider');
 const PROVIDERS = {
   gemini: require('./providers/geminiProvider'),
   anthropic: require('./providers/anthropicProvider'),
-  openai: makeProvider({ name: 'OpenAI', baseURL: 'https://api.openai.com/v1', defaultModel: 'gpt-5-mini' }),
-  deepseek: makeProvider({ name: 'DeepSeek', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' }),
-  xai: makeProvider({ name: 'xAI Grok', baseURL: 'https://api.x.ai/v1', defaultModel: 'grok-4-fast-non-reasoning' }),
-  qwen: makeProvider({ name: 'Qwen', baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus' }),
+  openai: makeProvider({ name: 'OpenAI', baseURL: 'https://api.openai.com/v1', defaultModel: 'gpt-5.6-luna' }),
+  deepseek: makeProvider({ name: 'DeepSeek', baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-v4-flash' }),
+  xai: makeProvider({ name: 'xAI Grok', baseURL: 'https://api.x.ai/v1', defaultModel: 'grok-4.5' }),
+  qwen: makeProvider({ name: 'Qwen', baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen3.6-flash' }),
   // 사용자가 baseURL을 직접 지정하는 커스텀 엔드포인트 (Ollama·LM Studio·자체 호스팅 등 OpenAI 호환)
   custom: makeProvider({ name: '커스텀', baseURL: null, defaultModel: 'llama3.1', dynamicBaseURL: true }),
+};
+
+/**
+ * 제공자별 추천/알려진 모델 목록 (2026-07 공식 문서 기준).
+ * 키가 없어도 어떤 모델이 있는지 보여주기 위한 정적 후보. 실제 목록은 listModels로 조회.
+ */
+const KNOWN_MODELS = {
+  gemini: [
+    'gemini-flash-lite-latest', // 별칭: 최신 flash-lite (무료 등급 여유)
+    'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+  ],
+  anthropic: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001', 'claude-fable-5'],
+  openai: ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6'],
+  deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  xai: ['grok-4.5'],
+  qwen: ['qwen3.6-flash', 'qwen3.7-plus', 'qwen3.7-max', 'qwen3.8-max-preview'],
+  custom: ['llama3.1', 'qwen3', 'gemma3', 'mistral'], // Ollama에서 흔한 로컬 모델 예시
 };
 
 const PROVIDER_NAMES = Object.keys(PROVIDERS);
@@ -270,4 +292,13 @@ async function testModel(cfg) {
   return String(text || '').trim().slice(0, 40);
 }
 
-module.exports = { callGM, suggestGmActions, chatReply, listModels, testModel, defaultModel, PROVIDER_NAMES };
+module.exports = {
+  callGM,
+  suggestGmActions,
+  chatReply,
+  listModels,
+  testModel,
+  defaultModel,
+  PROVIDER_NAMES,
+  KNOWN_MODELS,
+};
