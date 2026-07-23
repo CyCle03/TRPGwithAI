@@ -313,6 +313,32 @@ select#setProvider {
   font-weight: 600;
   padding-top: 4px;
 }
+.gear-tags {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.gear-chip.selected .gear-tags {
+  color: var(--dice);
+}
+.weapon-box {
+  margin-top: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 0.85rem;
+}
+.weapon-box .wb-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.weapon-box .wb-tags {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.75rem;
+  color: var(--dice);
+}
 .gear-chip {
   background: var(--panel-2);
   border: 2px solid var(--border);

@@ -42,6 +42,7 @@ const xpBar = document.getElementById('xpBar');
 const hpText = document.getElementById('hpText');
 const hpBar = document.getElementById('hpBar');
 const armorText = document.getElementById('armorText');
+const weaponBoxEl = document.getElementById('weaponBox');
 const statsEl = document.getElementById('stats');
 const inventoryEl = document.getElementById('inventory');
 const movesEl = document.getElementById('moves');
@@ -318,7 +319,11 @@ function renderGear() {
       const chip = document.createElement('div');
       const picked = selectedGearChoices[group.id] === o.id;
       chip.className = 'gear-chip' + (picked ? ' selected' : '');
-      chip.textContent = o.name;
+      const tagHtml =
+        o.tags && o.tags.length
+          ? `<div class="gear-tags">${o.tags.map(escapeHtml).join(' · ')}</div>`
+          : '';
+      chip.innerHTML = escapeHtml(o.name) + tagHtml;
       chip.addEventListener('click', () => {
         selectedGearChoices[group.id] = o.id;
         renderGear();
@@ -443,11 +448,20 @@ function renderSheetSummary() {
     .map((o) => o.name);
   const allGear = [...cls.baseGear, ...chosenNames];
   const moveNames = (cls.moves || []).map((m) => m.name).join(', ');
+  const weaponGroup = (cls.gearChoices || []).find((g) => g.id === 'weapon');
+  const weaponOpt = weaponGroup
+    ? weaponGroup.options.find((o) => o.id === selectedGearChoices.weapon)
+    : null;
+  const weaponLine =
+    weaponOpt && weaponOpt.tags && weaponOpt.tags.length
+      ? `<div><span class="lbl">무기 태그</span> ${weaponOpt.tags.join(' · ')}</div>`
+      : '';
   sheetSummaryEl.innerHTML =
     `<div><span class="lbl">클래스</span> ${cls.name}</div>` +
     `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${computeArmor(cls)} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
     `<div><span class="lbl">능력치</span> ${statLine}</div>` +
     `<div><span class="lbl">장비</span> ${allGear.join(', ')}</div>` +
+    weaponLine +
     `<div><span class="lbl">배울 기술</span> ${moveNames}</div>`;
 }
 
@@ -645,6 +659,17 @@ function updateStatus(c) {
   const pct = c.maxHp > 0 ? Math.max(0, (c.hp / c.maxHp) * 100) : 0;
   hpBar.style.width = pct + '%';
   armorText.textContent = `방어구 ${c.armor}`;
+
+  // 장착 무기 + 태그
+  if (c.weapon && c.weapon.name) {
+    const tags = (c.weapon.tags || []).length
+      ? `<span class="wb-tags">${c.weapon.tags.map(escapeHtml).join(' · ')}</span>`
+      : '';
+    weaponBoxEl.innerHTML = `<span class="wb-label">무기</span> ${escapeHtml(c.weapon.name)} ${tags}`;
+    weaponBoxEl.classList.remove('hidden');
+  } else {
+    weaponBoxEl.classList.add('hidden');
+  }
 
   statsEl.innerHTML = '';
   Object.entries(c.stats).forEach(([k, v]) => {

@@ -23,9 +23,9 @@ const CLASSES = {
     baseGear: ['던전 배낭', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'sword', name: '장검(균형 잡힌)' },
-        { id: 'axe', name: '전투 도끼(강력한)' },
-        { id: 'hammer', name: '워해머(둔중하나 묵직한)' } ] },
+        { id: 'sword', name: '장검(균형 잡힌)', tags: ['근접'] },
+        { id: 'axe', name: '전투 도끼(강력한)', tags: ['근접', '지저분'] },
+        { id: 'hammer', name: '워해머(둔중하나 묵직한)', tags: ['근접', '강하게 밀침'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'chain_shield', name: '사슬 갑옷 + 방패 (방어구 2)', armor: 2 },
         { id: 'plate', name: '판금 갑옷 (방어구 2, 둔중)', armor: 2 },
@@ -43,8 +43,8 @@ const CLASSES = {
     baseGear: ['주문서', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'staff', name: '지팡이(원거리 마력)' },
-        { id: 'dagger', name: '단검(호신용)' } ] },
+        { id: 'staff', name: '지팡이(원거리 마력)', tags: ['간격', '양손'] },
+        { id: 'dagger', name: '단검(호신용)', tags: ['손닿는 거리'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'robe', name: '마법사 로브 (방어구 0)', armor: 0 },
         { id: 'leather', name: '가죽 갑옷 (방어구 1, 거추장)', armor: 1 } ] },
@@ -61,8 +61,8 @@ const CLASSES = {
     baseGear: ['성징(신앙의 상징)', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'mace', name: '철퇴' },
-        { id: 'hammer', name: '전투 망치' } ] },
+        { id: 'mace', name: '철퇴', tags: ['근접'] },
+        { id: 'hammer', name: '전투 망치', tags: ['근접', '강하게 밀침'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'chain', name: '사슬 갑옷 (방어구 1)', armor: 1 },
         { id: 'leather_shield', name: '가죽 갑옷 + 나무 방패 (방어구 1)', armor: 1 },
@@ -80,9 +80,9 @@ const CLASSES = {
     baseGear: ['도둑 도구', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'daggers', name: '단검 두 자루' },
-        { id: 'short_sword', name: '짧은 검' },
-        { id: 'crossbow', name: '손 석궁' } ] },
+        { id: 'daggers', name: '단검 두 자루', tags: ['손닿는 거리', '정밀'] },
+        { id: 'short_sword', name: '짧은 검', tags: ['근접', '정밀'] },
+        { id: 'crossbow', name: '손 석궁', tags: ['가까운 원거리', '재장전'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
         { id: 'cloak', name: '어둠의 망토 (방어구 0, 은밀)', armor: 0 } ] },
@@ -99,9 +99,9 @@ const CLASSES = {
     baseGear: ['사냥 도구', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'bow', name: '장궁과 화살통' },
-        { id: 'crossbow', name: '석궁' },
-        { id: 'spear', name: '창' } ] },
+        { id: 'bow', name: '장궁과 화살통', tags: ['먼 원거리'] },
+        { id: 'crossbow', name: '석궁', tags: ['먼 원거리', '재장전'] },
+        { id: 'spear', name: '창', tags: ['간격'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
         { id: 'light', name: '가벼운 차림 (방어구 0, 민첩)', armor: 0 } ] },
@@ -118,9 +118,9 @@ const CLASSES = {
     baseGear: ['악기', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'rapier', name: '세검' },
-        { id: 'dagger', name: '단검' },
-        { id: 'sling', name: '투석구' } ] },
+        { id: 'rapier', name: '세검', tags: ['근접', '정밀'] },
+        { id: 'dagger', name: '단검', tags: ['손닿는 거리'] },
+        { id: 'sling', name: '투석구', tags: ['가까운 원거리'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'leather', name: '가죽 갑옷 (방어구 1)', armor: 1 },
         { id: 'fine', name: '화려한 의복 (방어구 0)', armor: 0 } ] },
@@ -137,9 +137,9 @@ const CLASSES = {
     baseGear: ['성징', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'sword', name: '대검' },
-        { id: 'hammer', name: '전투 망치' },
-        { id: 'lance', name: '창' } ] },
+        { id: 'sword', name: '대검', tags: ['근접', '양손', '피해 +1'] },
+        { id: 'hammer', name: '전투 망치', tags: ['근접', '강하게 밀침'] },
+        { id: 'lance', name: '창', tags: ['간격'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'plate_shield', name: '판금 갑옷 + 방패 (방어구 3)', armor: 3 },
         { id: 'chain_shield', name: '사슬 갑옷 + 방패 (방어구 2)', armor: 2 } ] },
@@ -156,9 +156,9 @@ const CLASSES = {
     baseGear: ['자연의 징표', '여행 식량 5일분'],
     gearChoices: [
       { id: 'weapon', label: '주무기', options: [
-        { id: 'staff', name: '지팡이' },
-        { id: 'sickle', name: '낫' },
-        { id: 'sling', name: '투석구' } ] },
+        { id: 'staff', name: '지팡이', tags: ['간격', '양손'] },
+        { id: 'sickle', name: '낫', tags: ['근접'] },
+        { id: 'sling', name: '투석구', tags: ['가까운 원거리'] } ] },
       { id: 'armor', label: '방어구', options: [
         { id: 'hide', name: '가죽 갑옷 (방어구 1)', armor: 1 },
         { id: 'robe', name: '자연의 의복 (방어구 0)', armor: 0 } ] },
@@ -321,11 +321,13 @@ function createCharacter(name, classId, opts = {}) {
   const choices = opts.choices || {};
   const chosenNames = [];
   let armor = 0;
+  let weapon = null;
   for (const group of cls.gearChoices || []) {
     const picked = group.options.find((o) => o.id === choices[group.id]) || group.options[0];
     if (picked) {
       chosenNames.push(picked.name);
       if (typeof picked.armor === 'number') armor += picked.armor;
+      if (group.id === 'weapon') weapon = { name: picked.name, tags: picked.tags || [] };
     }
   }
   return {
@@ -338,6 +340,7 @@ function createCharacter(name, classId, opts = {}) {
     maxHp: cls.maxHp,
     hp: cls.maxHp,
     armor,
+    weapon,
     stats,
     inventory: [...cls.baseGear, ...chosenNames],
     moves: [],
