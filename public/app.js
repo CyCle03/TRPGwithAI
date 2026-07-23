@@ -108,16 +108,18 @@ const chatThinkingEl = document.getElementById('chatThinking');
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
-// 챗 설정 폼
-const cpNameEl = document.getElementById('cpName');
-const cpDescriptionEl = document.getElementById('cpDescription');
+// 챗 설정 폼 (세계관 + 다중 캐릭터)
+const cpTitleEl = document.getElementById('cpTitle');
+const cpLoreEl = document.getElementById('cpLore');
+const cpCharactersEl = document.getElementById('cpCharacters');
+const cpAddCharBtn = document.getElementById('cpAddChar');
 const cpScenarioEl = document.getElementById('cpScenario');
-const cpExampleEl = document.getElementById('cpExample');
 const cpGreetingEl = document.getElementById('cpGreeting');
 const cpUserPersonaEl = document.getElementById('cpUserPersona');
 const chatSetupErrorEl = document.getElementById('chatSetupError');
 const cpCancelBtn = document.getElementById('cpCancel');
 const cpSaveBtn = document.getElementById('cpSave');
+let chatChars = [{ name: '', description: '' }]; // 설정 폼의 캐릭터 편집 상태
 
 let authMode = 'login'; // 'login' | 'signup'
 let mySettings = null; // {provider, model, baseURL, keys:{provider:bool}}
@@ -439,25 +441,68 @@ function applyChatState(data) {
   }
 }
 
-/** 챗 설정 폼을 현재 페르소나로 채우고 표시(편집/신규 공용). */
+/** 캐릭터 편집 행들을 렌더(이름 + 설명 + 삭제). */
+function renderCharEditors() {
+  cpCharactersEl.innerHTML = '';
+  chatChars.forEach((ch, i) => {
+    const row = document.createElement('div');
+    row.className = 'cp-char';
+    const head = document.createElement('div');
+    head.className = 'cp-char-head';
+    const nameIn = document.createElement('input');
+    nameIn.type = 'text';
+    nameIn.maxLength = 60;
+    nameIn.placeholder = `캐릭터 ${i + 1} 이름`;
+    nameIn.value = ch.name;
+    nameIn.addEventListener('input', () => (chatChars[i].name = nameIn.value));
+    head.appendChild(nameIn);
+    if (chatChars.length > 1) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'cp-char-del';
+      del.textContent = '✕';
+      del.title = '이 캐릭터 삭제';
+      del.addEventListener('click', () => {
+        chatChars.splice(i, 1);
+        renderCharEditors();
+      });
+      head.appendChild(del);
+    }
+    const desc = document.createElement('textarea');
+    desc.rows = 3;
+    desc.placeholder = '성격 · 말투 · 외형 · 배경';
+    desc.value = ch.description;
+    desc.addEventListener('input', () => (chatChars[i].description = desc.value));
+    row.appendChild(head);
+    row.appendChild(desc);
+    cpCharactersEl.appendChild(row);
+  });
+}
+
+/** 챗 설정 폼을 현재 정의로 채우고 표시(편집/신규 공용). */
 function openChatSetupForm(data) {
-  const p = (data && data.persona) || {};
-  cpNameEl.value = p.name || '';
-  cpDescriptionEl.value = p.description || '';
-  cpScenarioEl.value = p.scenario || '';
-  cpExampleEl.value = p.exampleDialogue || '';
-  cpGreetingEl.value = p.greeting || '';
-  cpUserPersonaEl.value = p.userPersona || '';
+  const d = (data && data.def) || {};
+  cpTitleEl.value = d.worldTitle || '';
+  cpLoreEl.value = d.worldLore || '';
+  chatChars = (d.characters && d.characters.length)
+    ? d.characters.map((c) => ({ name: c.name || '', description: c.description || '' }))
+    : [{ name: '', description: '' }];
+  renderCharEditors();
+  cpScenarioEl.value = d.scenario || '';
+  cpGreetingEl.value = d.greeting || '';
+  cpUserPersonaEl.value = d.userPersona || '';
   chatSetupErrorEl.classList.add('hidden');
   showChatSetup();
 }
 
-function collectPersona() {
+function collectDef() {
   return {
-    name: cpNameEl.value.trim(),
-    description: cpDescriptionEl.value.trim(),
+    worldTitle: cpTitleEl.value.trim(),
+    worldLore: cpLoreEl.value.trim(),
+    characters: chatChars
+      .map((c) => ({ name: (c.name || '').trim(), description: (c.description || '').trim() }))
+      .filter((c) => c.name),
     scenario: cpScenarioEl.value.trim(),
-    exampleDialogue: cpExampleEl.value.trim(),
     greeting: cpGreetingEl.value.trim(),
     userPersona: cpUserPersonaEl.value.trim(),
   };
@@ -889,20 +934,25 @@ cpCancelBtn.addEventListener('click', () => {
     setMode('gm');
   }
 });
+cpAddCharBtn.addEventListener('click', () => {
+  if (chatChars.length >= 8) return;
+  chatChars.push({ name: '', description: '' });
+  renderCharEditors();
+});
 cpSaveBtn.addEventListener('click', () => {
-  const persona = collectPersona();
-  if (!persona.name) {
-    chatSetupErrorEl.textContent = '캐릭터 이름은 필수입니다.';
+  const def = collectDef();
+  if (!def.characters.length) {
+    chatSetupErrorEl.textContent = '이름 있는 캐릭터가 최소 1명 필요합니다.';
     chatSetupErrorEl.classList.remove('hidden');
     return;
   }
-  if (!persona.description) {
-    chatSetupErrorEl.textContent = '캐릭터 설명을 입력하세요.';
+  if (def.characters.some((c) => !c.description)) {
+    chatSetupErrorEl.textContent = '각 캐릭터의 설명을 입력하세요.';
     chatSetupErrorEl.classList.remove('hidden');
     return;
   }
   chatSetupErrorEl.classList.add('hidden');
-  socket.emit('saveChatPersona', { persona });
+  socket.emit('saveChatDef', { def });
 });
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();

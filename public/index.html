@@ -178,23 +178,31 @@
       </aside>
     </div>
 
-    <!-- 캐릭터 챗: 설정 화면 (character.ai식 리치) -->
+    <!-- 캐릭터 챗: 세계관 + 다중 캐릭터 설정 화면 -->
     <div id="chatSetup" class="setup hidden">
       <div class="setup-card">
-        <h1 id="chatSetupTitle">💬 캐릭터 만들기</h1>
-        <p class="subtitle">설정을 직접 입력해 나만의 캐릭터와 대화하세요. * 는 필수.</p>
-        <label>캐릭터 이름 *</label>
-        <input id="cpName" type="text" maxlength="60" placeholder="예: 루나" />
-        <label>캐릭터 설명 · 성격 · 말투 · 배경 *</label>
-        <textarea id="cpDescription" rows="5" placeholder="성격, 말투, 외형, 배경 등 캐릭터를 자세히 설명하세요."></textarea>
-        <label>상황 / 시나리오 <span class="opt">(선택)</span></label>
-        <textarea id="cpScenario" rows="3" placeholder="지금 어떤 상황인지, 어디서 만나는지 등"></textarea>
-        <label>예시 대화 <span class="opt">(선택 · 말투 참고용)</span></label>
-        <textarea id="cpExample" rows="3" placeholder="루나: ...흥, 또 너야?&#10;나: 안녕 루나."></textarea>
-        <label>첫 인사말 <span class="opt">(선택)</span></label>
-        <textarea id="cpGreeting" rows="2" placeholder="대화 시작 시 캐릭터가 먼저 건네는 말"></textarea>
+        <h1 id="chatSetupTitle">💬 캐릭터 · 세계관 만들기</h1>
+        <p class="subtitle">세계관과 여러 캐릭터를 직접 만들어 대화하세요. 캐릭터는 1명 이상 필요합니다.</p>
+
+        <label>제목 <span class="opt">(선택 · 목록 표시명)</span></label>
+        <input id="cpTitle" type="text" maxlength="80" placeholder="예: 안개 낀 마법 학원" />
+
+        <label>세계관 설정 <span class="opt">(선택 · 여러 캐릭터일 때 유용)</span></label>
+        <textarea id="cpLore" rows="3" placeholder="배경 세계, 규칙, 분위기 등"></textarea>
+
+        <label>등장인물 *</label>
+        <div id="cpCharacters" class="cp-characters"></div>
+        <button type="button" id="cpAddChar" class="ghost cp-add">＋ 캐릭터 추가</button>
+
+        <label>시작 상황 / 시나리오 <span class="opt">(선택)</span></label>
+        <textarea id="cpScenario" rows="3" placeholder="첫 장면, 어디서 어떻게 시작하는지"></textarea>
+
+        <label>첫 인사말 / 오프닝 <span class="opt">(선택)</span></label>
+        <textarea id="cpGreeting" rows="2" placeholder="대화 시작 시 먼저 보여줄 장면·대사"></textarea>
+
         <label>내 페르소나 <span class="opt">(선택)</span></label>
         <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
+
         <div id="chatSetupError" class="auth-error hidden"></div>
         <div class="wizard-nav">
           <button id="cpCancel" class="ghost">취소</button>

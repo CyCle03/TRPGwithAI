@@ -204,7 +204,7 @@ function loadUserChats(userId, user) {
       chats[id] = {
         id,
         ai: c.ai || defaultAiFor(user),
-        persona: c.persona || {},
+        def: chat.migrateDef(c), // 구버전 persona 자동 변환
         messages: Array.isArray(c.messages) ? c.messages : [],
       };
     }
@@ -218,7 +218,7 @@ function loadUserChats(userId, user) {
 function persistChats(userId, uc) {
   const chats = {};
   for (const [id, c] of Object.entries(uc.chats)) {
-    chats[id] = { id, ai: c.ai, persona: c.persona, messages: c.messages };
+    chats[id] = { id, ai: c.ai, def: c.def, messages: c.messages };
   }
   chatStore.save(userId, { activeId: uc.activeId, chats });
 }
@@ -229,8 +229,8 @@ function chatListPayload(uc) {
     max: chatStore.MAX_CHATS,
     chats: Object.values(uc.chats).map((c) => ({
       id: c.id,
-      name: (c.persona && c.persona.name) || null,
-      configured: !!(c.persona && c.persona.name),
+      name: chat.displayName(c.def),
+      configured: chat.isConfigured(c.def),
       ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
     })),
   };
@@ -241,8 +241,8 @@ function chatStatePayload(c) {
   return {
     chatId: c.id,
     ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
-    persona: c.persona || {},
-    configured: !!(c.persona && c.persona.name),
+    def: c.def || chat.normalizeDef({}),
+    configured: chat.isConfigured(c.def),
     messages: c.messages || [],
   };
 }
@@ -441,22 +441,22 @@ io.on('connection', (socket) => {
       return emit('error', { message: `캐릭터 챗은 최대 ${chatStore.MAX_CHATS}개까지 저장돼요.` });
     }
     const id = newId();
-    uc.chats[id] = { id, ai: defaultAiFor(user), persona: {}, messages: [] };
+    uc.chats[id] = { id, ai: defaultAiFor(user), def: chat.normalizeDef({}), messages: [] };
     uc.activeId = id;
     persistChats(userId, uc);
     emit('chatState', chatStatePayload(uc.chats[id]));
     emit('chats', chatListPayload(uc));
   });
 
-  socket.on('saveChatPersona', (payload) => {
+  socket.on('saveChatDef', (payload) => {
     const c = activeChat();
     if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
-    const persona = chat.normalizePersona(payload && payload.persona);
-    if (!persona.name) return emit('error', { message: '캐릭터 이름은 필수입니다.' });
-    c.persona = persona;
+    const def = chat.normalizeDef(payload && payload.def);
+    if (!chat.isConfigured(def)) return emit('error', { message: '이름 있는 캐릭터가 최소 1명 필요합니다.' });
+    c.def = def;
     // 첫 인사말을 대화 시작으로 시드(메시지가 비어 있을 때만)
-    if (!c.messages.length && persona.greeting) {
-      c.messages.push({ role: 'assistant', content: persona.greeting });
+    if (!c.messages.length && def.greeting) {
+      c.messages.push({ role: 'assistant', content: def.greeting });
     }
     persistChats(userId, uc);
     emit('chatState', chatStatePayload(c));
@@ -496,7 +496,7 @@ io.on('connection', (socket) => {
   socket.on('chatSend', async (payload) => {
     const c = activeChat();
     if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
-    if (!c.persona || !c.persona.name) return emit('error', { message: '먼저 캐릭터를 설정하세요.' });
+    if (!chat.isConfigured(c.def)) return emit('error', { message: '먼저 캐릭터를 설정하세요.' });
     if (chatBusy) return emit('error', { message: '응답 중입니다. 잠시만요.' });
     const text = String((payload && payload.text) || '').trim();
     if (!text) return;
@@ -513,7 +513,7 @@ io.on('connection', (socket) => {
     chatBusy = true;
     emit('chatThinking', { on: true });
     try {
-      const system = chat.buildSystemPrompt(c.persona);
+      const system = chat.buildSystemPrompt(c.def);
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const reply = await aiGM.chatReply(
         { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL },

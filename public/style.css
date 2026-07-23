@@ -204,6 +204,48 @@ select#setProvider {
   outline: none;
   border-color: var(--accent);
 }
+/* 캐릭터 편집기 */
+.cp-characters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cp-char {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.cp-char-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.cp-char-head input {
+  flex: 1;
+  margin-bottom: 0;
+}
+.cp-char-del {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.cp-char-del:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.cp-char textarea {
+  margin-bottom: 0;
+}
+.cp-add {
+  margin-bottom: 8px;
+}
 .disclaimer {
   margin-top: 16px;
   padding: 12px;
