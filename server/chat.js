@@ -231,7 +231,10 @@ function buildSystemPrompt(def, lengthOverride, opts) {
       '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 장면 묘사는 서술로, 대사는 따옴표로.'
     );
   } else {
-    lines.push('\n사용자 캐릭터를 대신 조종하지 마라.');
+    // 소형 모델이 가장 자주 어기는 두 가지만 콕 집어 강조(토큰 대비 효과가 크다)
+    lines.push(
+      '\n중요: 사용자의 대사와 행동을 절대 지어내지 마라. 그 장면에 없던 인물을 갑자기 등장시키지 마라.'
+    );
   }
   lines.push(`\n[응답 길이]\n${LENGTH_META[effectiveLength(d, lengthOverride)].instruction}`);
   return lines.join('\n');
