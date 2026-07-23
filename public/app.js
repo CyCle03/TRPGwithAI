@@ -43,6 +43,7 @@ const hpText = document.getElementById('hpText');
 const hpBar = document.getElementById('hpBar');
 const armorText = document.getElementById('armorText');
 const weaponBoxEl = document.getElementById('weaponBox');
+const coinTextEl = document.getElementById('coinText');
 const statsEl = document.getElementById('stats');
 const inventoryEl = document.getElementById('inventory');
 const movesEl = document.getElementById('moves');
@@ -70,6 +71,8 @@ const logoutBtn = document.getElementById('logoutBtn');
 const settingsModal = document.getElementById('settingsModal');
 const setProviderEl = document.getElementById('setProvider');
 const setModelEl = document.getElementById('setModel');
+const baseUrlRowEl = document.getElementById('baseUrlRow');
+const setBaseUrlEl = document.getElementById('setBaseUrl');
 const setKeyEl = document.getElementById('setKey');
 const keyStatusEl = document.getElementById('keyStatus');
 const keyHelpEl = document.getElementById('keyHelp');
@@ -167,6 +170,7 @@ const PROVIDER_LABELS = {
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   xai: 'Grok',
+  custom: '커스텀',
 };
 const KEY_URLS = {
   gemini: { url: 'aistudio.google.com/apikey', note: '무료 키 발급 가능(카드 불필요)' },
@@ -174,6 +178,7 @@ const KEY_URLS = {
   openai: { url: 'platform.openai.com/api-keys', note: '유료' },
   deepseek: { url: 'platform.deepseek.com/api_keys', note: '유료(저렴)' },
   xai: { url: 'console.x.ai', note: '유료' },
+  custom: { url: 'Ollama/LM Studio 등', note: '자체 호스팅은 키가 필요 없을 수 있음(비우면 됨)' },
 };
 
 function updateModelNote() {
@@ -671,6 +676,8 @@ function updateStatus(c) {
     weaponBoxEl.classList.add('hidden');
   }
 
+  if (coinTextEl) coinTextEl.textContent = c.coin || 0;
+
   statsEl.innerHTML = '';
   Object.entries(c.stats).forEach(([k, v]) => {
     const d = document.createElement('div');
@@ -896,6 +903,7 @@ function openSettings(firstTime) {
   if (mySettings) {
     setProviderEl.value = mySettings.provider || 'gemini';
     setModelEl.value = mySettings.model || '';
+    setBaseUrlEl.value = mySettings.baseURL || '';
   }
   setKeyEl.value = '';
   updateSettingsHints();
@@ -914,6 +922,8 @@ function updateSettingsHints() {
   keyStatusEl.textContent = mySettings && mySettings.hasApiKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
   const k = KEY_URLS[prov] || KEY_URLS.gemini;
   keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
+  // 커스텀 제공자일 때만 엔드포인트 주소 입력란 표시
+  baseUrlRowEl.classList.toggle('hidden', prov !== 'custom');
 }
 setProviderEl.addEventListener('change', updateSettingsHints);
 settingsBtn.addEventListener('click', () => openSettings(false));
@@ -924,6 +934,7 @@ settingsSaveBtn.addEventListener('click', async () => {
   settingsErrorEl.classList.add('hidden');
   try {
     const body = { provider: setProviderEl.value, model: setModelEl.value.trim() };
+    if (setProviderEl.value === 'custom') body.baseURL = setBaseUrlEl.value.trim();
     if (setKeyEl.value.trim()) body.apiKey = setKeyEl.value.trim();
     const data = await api('/api/settings', body);
     mySettings = data.user.settings;

@@ -40,7 +40,7 @@ const SCHEMA = {
       type: 'object',
       additionalProperties: false,
       required: [
-        'type', 'move', 'stat', 'reason', 'hpDelta',
+        'type', 'move', 'stat', 'reason', 'hpDelta', 'coinDelta',
         'addItems', 'removeItems', 'enemies', 'companions', 'xpGain',
       ],
       properties: {
@@ -49,6 +49,7 @@ const SCHEMA = {
         stat: { type: ['string', 'null'] },
         reason: { type: ['string', 'null'] },
         hpDelta: { type: ['integer', 'null'] },
+        coinDelta: { type: ['integer', 'null'] },
         addItems: { type: 'array', items: { type: 'string' } },
         removeItems: { type: 'array', items: { type: 'string' } },
         enemies: { type: ['array', 'null'], items: NPC_ITEM },

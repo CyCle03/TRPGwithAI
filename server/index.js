@@ -112,8 +112,8 @@ app.post('/api/settings', (req, res) => {
   const uid = userIdFromReq(req);
   if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
-    const { provider, model, apiKey } = req.body || {};
-    const user = auth.updateSettings(uid, { provider, model, apiKey });
+    const { provider, model, apiKey, baseURL } = req.body || {};
+    const user = auth.updateSettings(uid, { provider, model, apiKey, baseURL });
     res.json({ user });
   } catch (e) {
     res.status(400).json({ error: e.message });

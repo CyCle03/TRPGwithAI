@@ -140,7 +140,7 @@ function createUser(username, password) {
     username,
     passHash: hashPassword(password),
     createdAt: new Date().toISOString(),
-    settings: { provider: 'gemini', model: '', apiKeyEnc: null },
+    settings: { provider: 'gemini', model: '', apiKeyEnc: null, baseURL: '' },
   };
   db.byName[key] = id;
   saveUsers(db);
@@ -171,17 +171,26 @@ function getAiConfig(id) {
   return {
     provider: s.provider || 'gemini',
     model: s.model || '',
+    baseURL: s.baseURL || '',
     apiKey: s.apiKeyEnc ? decrypt(s.apiKeyEnc) : null,
   };
 }
 
-function updateSettings(id, { provider, model, apiKey }) {
+const VALID_PROVIDERS = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'custom'];
+
+function updateSettings(id, { provider, model, apiKey, baseURL }) {
   const db = loadUsers();
   const u = db.users[id];
   if (!u) throw new Error('사용자를 찾을 수 없습니다.');
   const s = u.settings || {};
-  if (['gemini', 'anthropic', 'openai', 'deepseek', 'xai'].includes(provider)) s.provider = provider;
+  if (VALID_PROVIDERS.includes(provider)) s.provider = provider;
   if (typeof model === 'string') s.model = model.trim().slice(0, 60);
+  // 커스텀 엔드포인트 주소(비밀 아님). http(s)만 허용.
+  if (typeof baseURL === 'string') {
+    const b = baseURL.trim().slice(0, 200);
+    if (b === '' || /^https?:\/\//i.test(b)) s.baseURL = b;
+    else throw new Error('엔드포인트 주소는 http:// 또는 https:// 로 시작해야 합니다.');
+  }
   // apiKey: 비어있지 않은 값이 오면 교체, 빈 문자열이면 유지, null이면 삭제
   if (typeof apiKey === 'string' && apiKey.trim()) {
     s.apiKeyEnc = encrypt(apiKey.trim());
@@ -202,6 +211,7 @@ function publicUser(u) {
     settings: {
       provider: s.provider || 'gemini',
       model: s.model || '',
+      baseURL: s.baseURL || '', // 비밀 아님(엔드포인트 주소)
       hasApiKey: !!s.apiKeyEnc, // 키 존재 여부만, 값은 절대 안 보냄
     },
   };

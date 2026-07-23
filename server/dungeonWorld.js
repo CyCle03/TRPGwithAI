@@ -5,6 +5,8 @@
  * 저작권 주의: 룰북 텍스트를 그대로 복제하지 않고 메커니즘/요지만 직접 요약했다.
  */
 
+const { normalizeInventory } = require('./rulesEngine');
+
 const STAT_KEYS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
 // 능력치 직접 배분 시 사용하는 표준 배열(보정치). 6칸에 하나씩 배치.
@@ -337,6 +339,7 @@ function createCharacter(name, classId, opts = {}) {
     look: String(opts.look || '').slice(0, 200),
     level: 1,
     xp: 0,
+    coin: 0,
     maxHp: cls.maxHp,
     hp: cls.maxHp,
     armor,
@@ -353,7 +356,12 @@ function ensureCharacterFields(character) {
   if (!character) return character;
   if (typeof character.level !== 'number') character.level = 1;
   if (typeof character.xp !== 'number') character.xp = 0;
+  if (typeof character.coin !== 'number') character.coin = 0;
   if (!Array.isArray(character.moves)) character.moves = [];
+  // 기존 저장본의 중복 아이템("은화 몇 닢" 여러 개 등)을 이름별 수량으로 합침.
+  if (Array.isArray(character.inventory)) {
+    character.inventory = normalizeInventory(character.inventory);
+  }
   return character;
 }
 

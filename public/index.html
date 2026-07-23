@@ -151,6 +151,8 @@
 
         <div class="weapon-box hidden" id="weaponBox"></div>
 
+        <div class="coin-row"><span class="coin-label">💰 소지금</span><b id="coinText">0</b></div>
+
         <h3>능력치</h3>
         <div id="stats" class="stats-grid"></div>
 
@@ -195,7 +197,16 @@
           <option value="openai">OpenAI (GPT)</option>
           <option value="deepseek">DeepSeek (저렴)</option>
           <option value="xai">xAI Grok</option>
+          <option value="custom">커스텀 (Ollama / OpenAI 호환)</option>
         </select>
+
+        <div id="baseUrlRow" class="hidden">
+          <label>엔드포인트 주소 <span class="opt">(baseURL)</span></label>
+          <input id="setBaseUrl" type="text" placeholder="예: http://호스트:11434/v1" autocomplete="off" />
+          <p class="hint" id="baseUrlHelp">
+            OpenAI 호환 <code>/chat/completions</code> 를 제공하는 주소. <b>이 서버(클라우드)에서 접근 가능한 공개 주소</b>여야 합니다 — 내 PC의 localhost Ollama는 직접 연결되지 않습니다.
+          </p>
+        </div>
 
         <label>모델 <span class="opt">(비우면 기본값 사용)</span></label>
         <input id="setModel" type="text" placeholder="기본값" autocomplete="off" />

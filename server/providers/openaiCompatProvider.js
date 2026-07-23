@@ -16,6 +16,7 @@ const GM_JSON_HINT = `반드시 아래 JSON 객체 하나로만 응답하라(설
     "stat": "STR/DEX/CON/INT/WIS/CHA 중 하나 또는 null",
     "reason": "짧은 이유 문자열 또는 null",
     "hpDelta": 정수 또는 null,
+    "coinDelta": 정수(돈 획득 +, 소모 −, 없으면 0),
     "addItems": ["아이템 이름", ...],
     "removeItems": ["아이템 이름", ...],
     "enemies": [{"name":"이름","hp":"상태서술","note":"특징"}] 또는 null,
@@ -58,20 +59,39 @@ async function chat(baseURL, apiKey, model, defaultModel, systemText, messages) 
   return content;
 }
 
-/** 하나의 OpenAI 호환 provider 객체를 만든다. */
-function makeProvider({ name, baseURL, defaultModel }) {
+/** baseURL 정규화: 뒤 슬래시 제거. */
+function normBase(url) {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * 하나의 OpenAI 호환 provider 객체를 만든다.
+ * @param {object} p
+ * @param {string|null} p.baseURL  고정 엔드포인트. dynamicBaseURL=true면 호출 시 인자로 받음.
+ * @param {boolean} [p.dynamicBaseURL]  Ollama·자체 호스팅처럼 사용자가 baseURL을 지정하는 경우.
+ */
+function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
+  // dynamic이면 키 없이도 허용(로컬 Ollama 등). 아니면 키 필수.
+  const resolveBase = (callBaseURL) => {
+    const b = dynamicBaseURL ? normBase(callBaseURL) : baseURL;
+    if (!b) throw new Error(`${name} 엔드포인트 주소(baseURL)를 설정에서 입력하세요. 예: http://호스트:11434/v1`);
+    return b;
+  };
+  const resolveKey = (apiKey) => {
+    if (dynamicBaseURL) return apiKey || 'local'; // Ollama 등은 인증 불필요 → 더미 토큰
+    if (!apiKey) throw new Error(`${name} API 키가 없습니다. 설정에서 본인 키를 등록하세요.`);
+    return apiKey;
+  };
   return {
     name,
     DEFAULT_MODEL: defaultModel,
-    async generate({ apiKey, model, staticSystem, dynamicSystem, messages }) {
-      if (!apiKey) throw new Error(`${name} API 키가 없습니다. 설정에서 본인 키를 등록하세요.`);
+    async generate({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
       const system = `${staticSystem}\n\n${dynamicSystem}\n\n${GM_JSON_HINT}`;
-      return chat(baseURL, apiKey, model, defaultModel, system, messages);
+      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages);
     },
-    async generateSuggestions({ apiKey, model, staticSystem, dynamicSystem, messages }) {
-      if (!apiKey) throw new Error(`${name} API 키가 없습니다.`);
+    async generateSuggestions({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
       const system = `${staticSystem}\n\n${dynamicSystem}\n\n${SUGGEST_JSON_HINT}`;
-      const text = await chat(baseURL, apiKey, model, defaultModel, system, messages);
+      const text = await chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages);
       try {
         const obj = JSON.parse(text);
         return JSON.stringify(obj.suggestions || []);
