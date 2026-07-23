@@ -112,11 +112,22 @@ function normalizeDef(raw) {
 }
 
 /**
+ * 추론형 모델(qwen3 등)이 남기는 <think>…</think> 블록을 제거한다.
+ * 닫는 태그가 없으면(토큰이 끊긴 경우) 그 뒤만 살린다.
+ */
+function stripThink(text) {
+  let s = String(text || '');
+  s = s.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  if (/<think>/i.test(s)) s = s.replace(/[\s\S]*<think>[\s\S]*$/i, '');
+  return s.replace(/^\s*<\/think>\s*/i, '').trim();
+}
+
+/**
  * AI 응답에서 [img:태그] 마커를 뽑아 이미지 id로 바꾸고, 본문에서는 마커를 제거한다.
  * @returns {{text:string, imageId:string|null}}
  */
 function extractImage(text, images) {
-  const raw = String(text || '');
+  const raw = stripThink(text);
   const m = IMG_MARKER_RE.exec(raw);
   if (!m) return { text: raw.trim(), imageId: null };
   const tag = m[1].trim().toLowerCase();
@@ -215,6 +226,7 @@ module.exports = {
   isConfigured,
   displayName,
   extractImage,
+  stripThink,
   normalizeLength,
   effectiveLength,
   maxTokensFor,

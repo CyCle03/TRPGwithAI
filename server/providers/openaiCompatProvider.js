@@ -97,7 +97,11 @@ function makeProvider({
   dynamicBaseURL = false,
   keyOptional = false, // 서버가 운영하는 로컬 모델 등, 사용자 키가 필요 없는 경우
   timeoutMs = 0, // CPU 추론처럼 느린 엔드포인트용 상한
+  autoNoThink = false, // qwen3류 추론 모델의 <think> 낭비를 끄기
 }) {
+  // qwen3 등은 기본이 추론 모드라 <think>에 토큰을 대량 소모한다 → /no_think 지시
+  const withNoThink = (system, model) =>
+    autoNoThink && /qwen3/i.test(String(model || defaultModel)) ? `${system}\n/no_think` : system;
   const resolveBase = (callBaseURL) => {
     const b = dynamicBaseURL ? normBase(callBaseURL) : baseURL;
     if (!b) throw new Error(`${name} 엔드포인트 주소(baseURL)를 설정에서 입력하세요. 예: http://호스트:11434/v1`);
@@ -127,7 +131,17 @@ function makeProvider({
     },
     // 캐릭터 챗: JSON 모드 없이 일반 텍스트
     async generateChat({ apiKey, model, baseURL: cbu, system, messages, maxTokens }) {
-      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false, maxTokens, timeoutMs);
+      return chat(
+        resolveBase(cbu),
+        resolveKey(apiKey),
+        model,
+        defaultModel,
+        withNoThink(system, model),
+        messages,
+        false,
+        maxTokens,
+        timeoutMs
+      );
     },
     /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */
     async listModels({ apiKey, baseURL: cbu }) {

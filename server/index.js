@@ -917,7 +917,9 @@ io.on('connection', (socket) => {
     }
     emit('chatThinking', { on: true });
     try {
-      const len = chat.effectiveLength(c.def, c.lengthOverride);
+      // 무료 체험(CPU 로컬 모델)은 생성 시간이 길이에 비례하므로 짧게 제한
+      const len =
+        provider === 'free' ? 'short' : chat.effectiveLength(c.def, c.lengthOverride);
       const system = chat.buildSystemPrompt(c.def, len);
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const reply = await aiGM.chatReply(

@@ -58,6 +58,7 @@ if (LOCAL_LLM_URL) {
     defaultModel: LOCAL_LLM_MODEL,
     keyOptional: true,
     timeoutMs: Number(process.env.LOCAL_LLM_TIMEOUT_MS || 180000),
+    autoNoThink: process.env.LOCAL_LLM_NO_THINK !== '0',
   });
 }
 
