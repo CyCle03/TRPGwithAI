@@ -455,6 +455,7 @@ io.on('connection', (socket) => {
     username: user ? user.username : null,
     settings: user ? user.settings : null,
     isAdmin: isAdmin(user),
+    freeLimit: FREE_LIMIT_PER_HOUR,
     providers: aiGM.PROVIDER_NAMES,
     defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
     knownModels: aiGM.KNOWN_MODELS, // 키 없이도 보여줄 추천 모델 후보

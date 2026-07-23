@@ -1268,6 +1268,30 @@ button.ghost.pulse {
   margin: 0 0 16px;
   font-size: 0.9rem;
 }
+/* 무료 체험 모드 유의사항 박스 */
+.free-notice {
+  margin: 10px 0 4px;
+  padding: 11px 13px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.free-notice b {
+  color: var(--text);
+}
+.free-notice ul {
+  margin: 6px 0 6px;
+  padding-left: 18px;
+}
+.free-notice li {
+  margin-bottom: 3px;
+}
+.free-notice .fn-good {
+  color: var(--state);
+}
 .model-actions {
   display: flex;
   gap: 8px;

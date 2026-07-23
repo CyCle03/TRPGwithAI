@@ -95,6 +95,31 @@ const gmModelListEl = document.getElementById('gmModelList');
 const gmFetchModelsBtn = document.getElementById('gmFetchModels');
 const gmTestModelBtn = document.getElementById('gmTestModel');
 const gmModelsHintEl = document.getElementById('gmModelsHint');
+const gmFreeNoticeEl = document.getElementById('gmFreeNotice');
+const setFreeNoticeEl = document.getElementById('setFreeNotice');
+let freeLimitPerHour = 30;
+
+/** 무료 체험 모드 유의사항 문구. */
+function freeNoticeHtml() {
+  return (
+    '<b>⚠️ 무료 체험 모드 유의사항</b><br />' +
+    '이 서버에 설치된 <b>작은 로컬 AI</b>로 동작합니다. API 키 없이 바로 쓸 수 있지만 아래 제한이 있어요.' +
+    '<ul>' +
+    '<li><b>느립니다</b> — CPU로 추론해서 한 응답에 수십 초가 걸릴 수 있어요.</li>' +
+    `<li><b>사용량 제한</b> — 동시에 한 분만, 시간당 ${freeLimitPerHour}회까지.</li>` +
+    '<li><b>품질이 낮습니다</b> — 소형 모델이라 말투·형식을 어기거나 설정을 놓칠 수 있어요. 세계관이 길수록 더 그렇습니다.</li>' +
+    '<li><b>체험용</b> — 예고 없이 중단되거나 모델이 바뀔 수 있습니다.</li>' +
+    '</ul>' +
+    '제대로 즐기시려면 <b>본인 API 키 등록</b>을 권합니다(Gemini는 무료 등급으로도 훨씬 빠르고 품질이 좋습니다).<br />' +
+    '<span class="fn-good">✅ 대화 내용이 외부 업체로 전송되지 않고 이 서버 안에서만 처리됩니다.</span>'
+  );
+}
+function toggleFreeNotice(el, provider) {
+  if (!el) return;
+  const on = provider === 'free';
+  el.classList.toggle('hidden', !on);
+  if (on) el.innerHTML = freeNoticeHtml();
+}
 
 // 모드 토글 + 캐릭터 챗
 const modeGameBtn = document.getElementById('modeGameBtn');
@@ -184,6 +209,7 @@ function wireSocket() {
     defaultModels = data.defaultModels || defaultModels;
     knownModels = data.knownModels || knownModels;
     if (Array.isArray(data.providers)) providersList = data.providers;
+    if (data.freeLimit) freeLimitPerHour = data.freeLimit;
     // 서버에 로컬 AI가 설정된 경우에만 '무료 체험' 선택지를 노출
     const freeOn = providersList.includes('free');
     ['setFreeOpt', 'gmFreeOpt'].forEach((id) => {
@@ -1195,9 +1221,13 @@ function updateGameModelHint() {
     : '모델 이름을 직접 입력하세요.';
   const ready = providerReady(prov);
   const pname = PROVIDER_LABELS[prov] || prov;
-  gmKeyHintEl.innerHTML = ready
-    ? `${pname} 키 등록됨 ✓`
-    : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
+  gmKeyHintEl.innerHTML =
+    prov === 'free'
+      ? '키가 필요 없습니다 — 서버의 로컬 AI로 바로 플레이합니다.'
+      : ready
+        ? `${pname} 키 등록됨 ✓`
+        : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
+  toggleFreeNotice(gmFreeNoticeEl, prov);
 }
 /** 모델 자동완성(datalist) 채우기. */
 function fillModelDatalist(models) {
@@ -1777,6 +1807,10 @@ function updateSettingsHints() {
   keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
   // 커스텀 제공자일 때만 엔드포인트 주소 입력란 표시
   baseUrlRowEl.classList.toggle('hidden', prov !== 'custom');
+  // 무료 체험은 키 입력이 필요 없음 + 유의사항 표시
+  setKeyEl.disabled = prov === 'free';
+  setKeyEl.placeholder = prov === 'free' ? '무료 체험은 키가 필요 없습니다' : '키를 붙여넣기 (변경할 때만 입력)';
+  toggleFreeNotice(setFreeNoticeEl, prov);
 }
 setProviderEl.addEventListener('change', updateSettingsHints);
 settingsBtn.addEventListener('click', () => openSettings(false));
