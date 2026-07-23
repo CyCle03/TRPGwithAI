@@ -18,6 +18,35 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 const COOKIE = 'trpg_token';
 
 const app = express();
+app.disable('x-powered-by'); // 서버 정보 노출 최소화
+
+// 보안 헤더 (모든 응답)
+app.use((req, res, next) => {
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Permissions-Policy',
+    'geolocation=(), microphone=(), camera=(), payment=(), usb=()'
+  );
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data:",
+      "connect-src 'self'", // 같은 출처 WebSocket(Socket.io) 포함
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+      "object-src 'none'",
+    ].join('; ')
+  );
+  next();
+});
+
 app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server);
