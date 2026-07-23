@@ -32,6 +32,36 @@ const SAMPLE_IMAGES = [
     tag: '밤바다',
     description: '바다·바다의 노래·배의 실종 등 불길한 장면',
   },
+  {
+    id: '5a11e0ba51a00005',
+    file: 'lian.png',
+    tag: '리안',
+    description: '등대지기 리안이 말하거나 전면에 나설 때',
+  },
+  {
+    id: '5a11e0ba51a00006',
+    file: 'marta.png',
+    tag: '마르타',
+    description: '선술집 주인 마르타가 말하거나 전면에 나설 때',
+  },
+  {
+    id: '5a11e0ba51a00007',
+    file: 'seren.png',
+    tag: '세렌',
+    description: '기억을 잃은 소녀 세렌이 말하거나 전면에 나설 때',
+  },
+  {
+    id: '5a11e0ba51a00008',
+    file: 'seasong.png',
+    tag: '바다의 노래',
+    description: '바다 밑의 노래가 들리거나 환영·홀림이 일어나는 순간',
+  },
+  {
+    id: '5a11e0ba51a00009',
+    file: 'ghostship.png',
+    tag: '사라진 배',
+    description: '실종된 배나 유령선이 등장하는 장면',
+  },
 ];
 
 /**
@@ -41,8 +71,10 @@ const SAMPLE_IMAGES = [
  */
 
 const SEED_KEY = 'sampleV1';
-const IMAGE_SEED_KEY = 'sampleImagesV1';
+// v1은 배경 4장까지만 넣었다. 인물·연출 5장을 추가하려면 새 키가 필요하다.
+const IMAGE_SEED_KEY = 'sampleImagesV2';
 const OWNER_SEED_KEY = 'sampleOwnerV1';
+const SAMPLE_ID_KEY = 'sampleEntryId'; // 소유권이 바뀌어도 샘플을 찾기 위한 id 기록
 // 샘플을 넘겨줄 실제 계정 아이디 (.env의 SAMPLE_OWNER로 변경 가능)
 const SAMPLE_OWNER = process.env.SAMPLE_OWNER || 'elcher';
 
@@ -94,6 +126,22 @@ const SAMPLE_DEF = {
   userPersona: '실종된 형제를 찾아 베일포트에 온 외지인. 이 도시에 연고도, 아는 사람도 없다.',
 };
 
+/**
+ * 샘플 공개 항목을 찾는다. 소유권이 실제 계정으로 넘어간 뒤에도 찾을 수 있도록
+ * 기록해둔 id → 제목 → 대표 이미지 id 순으로 시도한다.
+ */
+function findSampleEntry() {
+  const all = publish.listAll();
+  const savedId = publish.getSeed(SAMPLE_ID_KEY);
+  let e = savedId && all.find((x) => x.id === savedId);
+  if (e) return e;
+  e = all.find((x) => x.def && x.def.worldTitle === SAMPLE_DEF.worldTitle);
+  if (e) return e;
+  return all.find(
+    (x) => x.def && (x.def.images || []).some((im) => im.id === SAMPLE_IMAGES[0].id)
+  );
+}
+
 /** 샘플 이미지 파일을 uploads에 고정 id로 등록. */
 function importSampleImages() {
   const dir = path.join(__dirname, '..', 'assets', 'sample');
@@ -117,7 +165,7 @@ function ensureSampleEntry() {
     if (!publish.hasSeed(SEED_KEY)) {
       const def = chat.normalizeDef(SAMPLE_DEF);
       if (!chat.isConfigured(def)) return;
-      publish.publish({
+      const created = publish.publish({
         ownerId: '__sample__',
         ownerName: '샘플',
         def,
@@ -125,27 +173,39 @@ function ensureSampleEntry() {
         title: def.worldTitle,
       });
       publish.markSeed(SEED_KEY);
+      publish.markSeed(SAMPLE_ID_KEY, created.id);
       console.log('🌐 갤러리 샘플 세계관을 등록했습니다:', def.worldTitle);
       return;
     }
 
-    // 2) 이미 등록된 샘플에 이미지가 없으면 채워 넣는다(이미지 추가 배포 대응)
+    // 2) 샘플에 빠진 이미지가 있으면 채워 넣는다(소유권이 넘어간 뒤에도 동작).
+    //    사용자가 편집했을 수 있으므로 없는 것만 더하고 나머지는 건드리지 않는다.
     if (publish.hasSeed(IMAGE_SEED_KEY)) return;
-    const mine = publish.listMine('__sample__');
-    if (!mine.length) return;
-    const entry = publish.get(mine[0].id, '__sample__');
+    const entry = findSampleEntry();
     if (!entry) return;
-    const def = chat.normalizeDef({ ...entry.def, images: SAMPLE_DEF.images });
+    const have = new Set(((entry.def && entry.def.images) || []).map((im) => im.id));
+    const missing = SAMPLE_IMAGES.filter((im) => !have.has(im.id));
+    if (!missing.length) {
+      publish.markSeed(IMAGE_SEED_KEY);
+      return;
+    }
+    const def = chat.normalizeDef({
+      ...entry.def,
+      images: [
+        ...((entry.def && entry.def.images) || []),
+        ...missing.map((im) => ({ id: im.id, tag: im.tag, description: im.description })),
+      ],
+    });
     publish.publish({
       pubId: entry.id,
-      ownerId: '__sample__',
-      ownerName: '샘플',
+      ownerId: entry.ownerId,
+      ownerName: entry.ownerName,
       def,
       visibility: entry.visibility,
       title: entry.title,
     });
     publish.markSeed(IMAGE_SEED_KEY);
-    console.log('🖼️  샘플 세계관에 이미지', def.images.length, '장을 추가했습니다.');
+    console.log('🖼️  샘플 세계관에 이미지', missing.length, '장을 추가했습니다(총', def.images.length + '장).');
   } catch (e) {
     console.error('갤러리 샘플 등록 실패:', e.message);
   }

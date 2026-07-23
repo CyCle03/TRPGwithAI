@@ -325,11 +325,20 @@ function hasSeed(key) {
   const db = loadAll();
   return !!(db.seeded && db.seeded[key]);
 }
-function markSeed(key) {
+function markSeed(key, value) {
   const db = loadAll();
   db.seeded = db.seeded || {};
-  db.seeded[key] = new Date().toISOString();
+  db.seeded[key] = value || new Date().toISOString();
   saveAll(db);
+}
+/** 시딩 때 저장해둔 값(예: 샘플 항목 id). */
+function getSeed(key) {
+  const db = loadAll();
+  return (db.seeded || {})[key] || null;
+}
+/** 모든 항목(내부용 — 시더가 소유권과 무관하게 샘플을 찾을 때). */
+function listAll() {
+  return Object.values(loadAll().entries);
 }
 
 module.exports = {
@@ -354,5 +363,7 @@ module.exports = {
   clearReports,
   hasSeed,
   markSeed,
+  getSeed,
+  listAll,
   VISIBILITIES,
 };
