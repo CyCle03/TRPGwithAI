@@ -300,6 +300,14 @@ function clearReports(pubId) {
   return true;
 }
 
+/** 공개 항목의 현재 소유자 id (공개 범위와 무관). 없으면 null. */
+function ownerOf(pubId) {
+  if (!pubId) return null;
+  const db = loadAll();
+  const e = db.entries[pubId];
+  return e ? e.ownerId : null;
+}
+
 /** 공개 항목의 소유자를 변경한다(샘플 → 실제 계정 이관용). */
 function transferOwner(pubId, newOwnerId, newOwnerName) {
   const db = loadAll();
@@ -332,6 +340,7 @@ module.exports = {
   get,
   bumpPlays,
   transferOwner,
+  ownerOf,
   listTags,
   toggleLike,
   listComments,

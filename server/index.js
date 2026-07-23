@@ -324,6 +324,14 @@ function loadUserChats(userId, user) {
       };
     }
   }
+  // 소유권 이전 보정: 이제 내가 원작자인 대화는 내 것으로 되돌리고 공개 항목과 연결한다.
+  Object.values(chats).forEach((c) => {
+    if (!c.sourceId) return;
+    if (publish.ownerOf(c.sourceId) === userId) {
+      c.sourceOwnerId = userId;
+      if (!c.publishedId) c.publishedId = c.sourceId;
+    }
+  });
   const activeId = raw && raw.activeId && chats[raw.activeId] ? raw.activeId : Object.keys(chats)[0] || null;
   const uc = { activeId, chats };
   userChats.set(userId, uc);
@@ -361,9 +369,16 @@ function chatListPayload(uc) {
   };
 }
 
-/** 남이 만든 세계관을 가져온 대화인가(정의 수정·재공개 금지). */
+/**
+ * 남이 만든 세계관을 가져온 대화인가(정의 수정·재공개 금지).
+ * 소유권이 이전됐을 수 있으므로 기록된 원작자보다 "현재 소유자"를 우선 판단한다.
+ * (예: 샘플이 __sample__ → 실제 계정으로 넘어간 경우, 그 계정에겐 내 작품이 된다)
+ */
 function isBorrowed(c, userId) {
-  return !!(c && c.sourceOwnerId && c.sourceOwnerId !== userId);
+  if (!c || !c.sourceId) return false;
+  const currentOwner = publish.ownerOf(c.sourceId);
+  if (currentOwner) return currentOwner !== userId;
+  return !!(c.sourceOwnerId && c.sourceOwnerId !== userId); // 원본이 삭제됐으면 기록 기준
 }
 
 /**
