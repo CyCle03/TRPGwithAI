@@ -211,6 +211,17 @@
         <label>내 페르소나 <span class="opt">(선택)</span></label>
         <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
 
+        <label>공개 설정</label>
+        <div class="publish-row">
+          <select id="cpVisibility">
+            <option value="private">🔒 비공개 (나만)</option>
+            <option value="link">🔗 링크 아는 사람만</option>
+            <option value="public">🌐 공개 (갤러리에 노출)</option>
+          </select>
+          <button type="button" id="cpPublish" class="ghost">적용</button>
+        </div>
+        <p class="hint" id="cpPublishHint">공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.</p>
+
         <div id="chatSetupError" class="auth-error hidden"></div>
         <div class="wizard-nav">
           <button id="cpCancel" class="ghost">취소</button>
@@ -227,6 +238,7 @@
           <div class="header-actions">
             <button id="chatModelBtn" class="ghost" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
             <button id="chatEditBtn" class="ghost" title="캐릭터 설정 편집">✎ 설정</button>
+            <button id="galleryBtn" class="ghost" title="공개 갤러리">🌐 갤러리</button>
             <button id="newChatBtn" class="ghost" title="새 캐릭터 만들기">＋ 새 캐릭터</button>
           </div>
         </header>
@@ -237,6 +249,20 @@
           <button type="submit" class="primary" id="chatSendBtn">전송</button>
         </form>
       </main>
+    </div>
+
+    <!-- 공개 갤러리 -->
+    <div id="gallery" class="setup hidden">
+      <div class="setup-card">
+        <h1>🌐 갤러리</h1>
+        <p class="subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
+        <div id="galleryList" class="gallery-list"></div>
+        <label>내가 공개한 것</label>
+        <div id="galleryMine" class="gallery-list"></div>
+        <div class="wizard-nav">
+          <button id="galleryClose" class="ghost">닫기</button>
+        </div>
+      </div>
     </div>
 
     <!-- 레벨업 선택 모달 -->

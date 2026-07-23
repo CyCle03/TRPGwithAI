@@ -15,6 +15,7 @@ const store = require('./store');
 const chatStore = require('./chatStore');
 const chat = require('./chat');
 const uploads = require('./uploads');
+const publish = require('./publish');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
@@ -270,6 +271,9 @@ function loadUserChats(userId, user) {
         ai: c.ai || defaultAiFor(user),
         def: chat.migrateDef(c), // 구버전 persona 자동 변환
         messages: Array.isArray(c.messages) ? c.messages : [],
+        publishedId: c.publishedId || null, // 내가 공개한 항목 id
+        sourceId: c.sourceId || null, // 갤러리에서 가져온 원본
+        sourceOwner: c.sourceOwner || null,
       };
     }
   }
@@ -282,7 +286,15 @@ function loadUserChats(userId, user) {
 function persistChats(userId, uc) {
   const chats = {};
   for (const [id, c] of Object.entries(uc.chats)) {
-    chats[id] = { id, ai: c.ai, def: c.def, messages: c.messages };
+    chats[id] = {
+      id,
+      ai: c.ai,
+      def: c.def,
+      messages: c.messages,
+      publishedId: c.publishedId || null,
+      sourceId: c.sourceId || null,
+      sourceOwner: c.sourceOwner || null,
+    };
   }
   chatStore.save(userId, { activeId: uc.activeId, chats });
 }
@@ -300,14 +312,17 @@ function chatListPayload(uc) {
   };
 }
 
-function chatStatePayload(c) {
+function chatStatePayload(c, ownerId) {
   if (!c) return null;
+  const entry = c.publishedId ? publish.get(c.publishedId, ownerId) : null;
   return {
     chatId: c.id,
     ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
     def: c.def || chat.normalizeDef({}),
     configured: chat.isConfigured(c.def),
     messages: c.messages || [],
+    published: entry ? { id: entry.id, visibility: entry.visibility, plays: entry.plays || 0 } : null,
+    source: c.sourceId ? { id: c.sourceId, ownerName: c.sourceOwner } : null,
   };
 }
 
@@ -498,7 +513,7 @@ io.on('connection', (socket) => {
 
   socket.on('chatInit', () => {
     emit('chats', chatListPayload(uc));
-    emit('chatState', chatStatePayload(activeChat()));
+    emit('chatState', chatStatePayload(activeChat(), userId));
   });
 
   socket.on('newChat', () => {
@@ -509,7 +524,7 @@ io.on('connection', (socket) => {
     uc.chats[id] = { id, ai: defaultAiFor(user), def: chat.normalizeDef({}), messages: [] };
     uc.activeId = id;
     persistChats(userId, uc);
-    emit('chatState', chatStatePayload(uc.chats[id]));
+    emit('chatState', chatStatePayload(uc.chats[id], userId));
     emit('chats', chatListPayload(uc));
   });
 
@@ -523,8 +538,26 @@ io.on('connection', (socket) => {
     if (!c.messages.length && def.greeting) {
       c.messages.push({ role: 'assistant', content: def.greeting });
     }
+    // 이미 공개한 항목이면 갤러리 쪽도 최신 정의로 갱신
+    if (c.publishedId) {
+      const cur = publish.get(c.publishedId, userId);
+      if (cur) {
+        try {
+          publish.publish({
+            pubId: c.publishedId,
+            ownerId: userId,
+            ownerName: user ? user.username : '익명',
+            def,
+            visibility: cur.visibility,
+            title: chat.displayName(def) || '제목 없음',
+          });
+        } catch (e) {
+          console.error('공개 항목 갱신 실패:', e.message);
+        }
+      }
+    }
     persistChats(userId, uc);
-    emit('chatState', chatStatePayload(c));
+    emit('chatState', chatStatePayload(c, userId));
     emit('chats', chatListPayload(uc));
   });
 
@@ -533,7 +566,7 @@ io.on('connection', (socket) => {
     if (!uc.chats[id]) return emit('error', { message: '없는 챗입니다.' });
     uc.activeId = id;
     persistChats(userId, uc);
-    emit('chatState', chatStatePayload(uc.chats[id]));
+    emit('chatState', chatStatePayload(uc.chats[id], userId));
     emit('chats', chatListPayload(uc));
   });
 
@@ -544,7 +577,7 @@ io.on('connection', (socket) => {
     if (uc.activeId === id) uc.activeId = Object.keys(uc.chats)[0] || null;
     persistChats(userId, uc);
     emit('chats', chatListPayload(uc));
-    emit('chatState', chatStatePayload(activeChat()));
+    emit('chatState', chatStatePayload(activeChat(), userId));
   });
 
   socket.on('setChatModel', (payload) => {
@@ -555,6 +588,71 @@ io.on('connection', (socket) => {
     if (typeof model === 'string') c.ai.model = model.trim().slice(0, 60);
     persistChats(userId, uc);
     emit('chatModelUpdated', { provider: c.ai.provider || 'gemini', model: c.ai.model || '' });
+    emit('chats', chatListPayload(uc));
+  });
+
+  // ----- 공유/퍼블리시 -----
+  socket.on('publishChat', (payload) => {
+    const c = activeChat();
+    if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
+    if (!chat.isConfigured(c.def)) return emit('error', { message: '먼저 캐릭터를 설정하세요.' });
+    const visibility = (payload && payload.visibility) || 'public';
+    try {
+      const entry = publish.publish({
+        pubId: c.publishedId || null,
+        ownerId: userId,
+        ownerName: user ? user.username : '익명',
+        def: c.def,
+        visibility,
+        title: chat.displayName(c.def) || '제목 없음',
+      });
+      c.publishedId = entry.id;
+      persistChats(userId, uc);
+      emit('chatState', chatStatePayload(c, userId));
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+
+  socket.on('unpublishChat', () => {
+    const c = activeChat();
+    if (!c || !c.publishedId) return;
+    try {
+      publish.unpublish(c.publishedId, userId);
+    } catch (e) {
+      return emit('error', { message: e.message });
+    }
+    c.publishedId = null;
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(c, userId));
+  });
+
+  socket.on('galleryList', () => {
+    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+  });
+
+  // 갤러리 항목을 내 대화로 가져와 플레이 (정의는 복사, 대화는 각자 별도)
+  socket.on('playPublished', (payload) => {
+    const entry = publish.get(payload && payload.id, userId);
+    if (!entry) return emit('error', { message: '공개된 항목을 찾을 수 없습니다.' });
+    if (Object.keys(uc.chats).length >= chatStore.MAX_CHATS) {
+      return emit('error', { message: `캐릭터 챗은 최대 ${chatStore.MAX_CHATS}개까지 저장돼요.` });
+    }
+    const cid = newId();
+    const def = chat.normalizeDef(entry.def);
+    uc.chats[cid] = {
+      id: cid,
+      ai: defaultAiFor(user),
+      def,
+      messages: def.greeting ? [{ role: 'assistant', content: def.greeting }] : [],
+      publishedId: null,
+      sourceId: entry.id,
+      sourceOwner: entry.ownerName,
+    };
+    uc.activeId = cid;
+    if (entry.ownerId !== userId) publish.bumpPlays(entry.id);
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(uc.chats[cid], userId));
     emit('chats', chatListPayload(uc));
   });
 

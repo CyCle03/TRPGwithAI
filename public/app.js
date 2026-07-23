@@ -123,11 +123,21 @@ const cpUserPersonaEl = document.getElementById('cpUserPersona');
 const chatSetupErrorEl = document.getElementById('chatSetupError');
 const cpCancelBtn = document.getElementById('cpCancel');
 const cpSaveBtn = document.getElementById('cpSave');
+// 공유/갤러리
+const galleryEl = document.getElementById('gallery');
+const galleryBtn = document.getElementById('galleryBtn');
+const galleryListEl = document.getElementById('galleryList');
+const galleryMineEl = document.getElementById('galleryMine');
+const galleryCloseBtn = document.getElementById('galleryClose');
+const cpVisibilityEl = document.getElementById('cpVisibility');
+const cpPublishBtn = document.getElementById('cpPublish');
+const cpPublishHintEl = document.getElementById('cpPublishHint');
 const cpImagesEl = document.getElementById('cpImages');
 const cpImageFileEl = document.getElementById('cpImageFile');
 const cpAddImageBtn = document.getElementById('cpAddImage');
 let chatChars = [{ name: '', description: '' }]; // 설정 폼의 캐릭터 편집 상태
 let chatImages = []; // 설정 폼의 이미지 편집 상태 [{id, tag, description}]
+let pendingSetupAction = null; // 'save' | 'publish' | null — 설정 화면 이탈 여부 결정
 
 let authMode = 'login'; // 'login' | 'signup'
 let mySettings = null; // {provider, model, baseURL, keys:{provider:bool}}
@@ -181,6 +191,14 @@ function wireSocket() {
     if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
     renderClasses(classesData);
     applyGameState(data);
+    // 공유 링크(?play=<id>)로 들어온 경우 해당 정의를 바로 가져와 플레이
+    const playId = new URLSearchParams(location.search).get('play');
+    if (playId) {
+      history.replaceState(null, '', location.pathname); // 주소 정리(중복 실행 방지)
+      chatInited = true;
+      setMode('chat');
+      socket.emit('playPublished', { id: playId });
+    }
     // 키가 하나도 없으면 설정을 먼저 열어 안내
     if (!Object.keys(mySettings.keys).length) openSettings(true);
   });
@@ -216,6 +234,11 @@ function wireSocket() {
     updateChatModelLabel();
   });
   socket.on('chatRollback', () => removeLastChatUserMsg());
+  socket.on('gallery', (data) => {
+    renderGalleryList(galleryListEl, data.items, false);
+    renderGalleryList(galleryMineEl, data.mine, true);
+    showGallery();
+  });
 
   socket.on('narration', (entry) => {
     afterDice(() => {
@@ -450,6 +473,12 @@ function applyChatState(data) {
     socket.emit('newChat');
     return;
   }
+  // 설정 화면에서 '공개 적용' 중이면 화면을 유지하고 공개 상태만 갱신(공유 링크 확인용)
+  if (!chatSetupEl.classList.contains('hidden') && pendingSetupAction !== 'save') {
+    updatePublishHint(data.published);
+    return;
+  }
+  pendingSetupAction = null;
   if (!data.configured) {
     openChatSetupForm(data);
   } else {
@@ -497,6 +526,68 @@ function renderCharEditors() {
     row.appendChild(desc);
     cpCharactersEl.appendChild(row);
   });
+}
+
+const VIS_LABEL = { private: '🔒 비공개', link: '🔗 링크 공개', public: '🌐 전체 공개' };
+
+/** 갤러리 카드 목록 렌더. mine=true면 내 항목(공개 범위 표시). */
+function renderGalleryList(el, items, mine) {
+  el.innerHTML = '';
+  if (!items || !items.length) {
+    const d = document.createElement('div');
+    d.className = 'gallery-empty';
+    d.textContent = mine ? '아직 공개한 것이 없어요.' : '아직 공개된 것이 없어요. 처음으로 공개해보세요!';
+    el.appendChild(d);
+    return;
+  }
+  items.forEach((it) => {
+    const card = document.createElement('div');
+    card.className = 'gallery-card-item';
+    if (it.coverImageId) {
+      const img = document.createElement('img');
+      img.src = `/img/${it.coverImageId}`;
+      img.alt = it.title;
+      img.loading = 'lazy';
+      card.appendChild(img);
+    }
+    const body = document.createElement('div');
+    body.className = 'gi-body';
+    const meta = [
+      `by ${it.ownerName}`,
+      it.characterCount ? `캐릭터 ${it.characterCount}` : null,
+      it.imageCount ? `이미지 ${it.imageCount}` : null,
+      `플레이 ${it.plays}`,
+      mine ? VIS_LABEL[it.visibility] : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    body.innerHTML =
+      `<div class="gi-title"></div><div class="gi-meta"></div><div class="gi-sum"></div>`;
+    body.querySelector('.gi-title').textContent = it.title;
+    body.querySelector('.gi-meta').textContent = meta;
+    body.querySelector('.gi-sum').textContent = it.summary || (it.characters || []).join(', ');
+    card.appendChild(body);
+    const play = document.createElement('button');
+    play.className = 'primary gi-play';
+    play.textContent = '플레이';
+    play.addEventListener('click', () => socket.emit('playPublished', { id: it.id }));
+    card.appendChild(play);
+    el.appendChild(card);
+  });
+}
+
+/** 설정 폼의 공개 상태 표시 갱신. */
+function updatePublishHint(published) {
+  if (published && published.visibility && published.visibility !== 'private') {
+    cpVisibilityEl.value = published.visibility;
+    const link = `${location.origin}/?play=${published.id}`;
+    cpPublishHintEl.innerHTML =
+      `${VIS_LABEL[published.visibility]} 중 · 플레이 ${published.plays || 0}회<br />` +
+      `공유 링크: <b>${escapeHtml(link)}</b>`;
+  } else {
+    cpVisibilityEl.value = 'private';
+    cpPublishHintEl.textContent = '공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.';
+  }
 }
 
 /** 업로드된 이미지 목록(썸네일 + 태그 + 설명 + 삭제) 렌더. */
@@ -582,6 +673,7 @@ function openChatSetupForm(data) {
   cpScenarioEl.value = d.scenario || '';
   cpGreetingEl.value = d.greeting || '';
   cpUserPersonaEl.value = d.userPersona || '';
+  updatePublishHint(data && data.published);
   chatSetupErrorEl.classList.add('hidden');
   showChatSetup();
 }
@@ -618,7 +710,14 @@ function setLandingBg(on) {
   else bgVideo.pause();
 }
 function hideAllScreens() {
-  [authEl, setupEl, gameEl, chatSetupEl, chatEl].forEach((e) => e && e.classList.add('hidden'));
+  [authEl, setupEl, gameEl, chatSetupEl, chatEl, galleryEl].forEach(
+    (e) => e && e.classList.add('hidden')
+  );
+}
+function showGallery() {
+  hideAllScreens();
+  galleryEl.classList.remove('hidden');
+  setLandingBg(true);
 }
 function showAuth() {
   hideAllScreens();
@@ -1085,6 +1184,22 @@ cpAddCharBtn.addEventListener('click', () => {
   chatChars.push({ name: '', description: '' });
   renderCharEditors();
 });
+galleryBtn.addEventListener('click', () => socket.emit('galleryList'));
+galleryCloseBtn.addEventListener('click', () => setMode('chat'));
+cpPublishBtn.addEventListener('click', () => {
+  const def = collectDef();
+  if (!def.characters.length) {
+    chatSetupErrorEl.textContent = '공개하려면 이름 있는 캐릭터가 최소 1명 필요합니다.';
+    chatSetupErrorEl.classList.remove('hidden');
+    return;
+  }
+  chatSetupErrorEl.classList.add('hidden');
+  pendingSetupAction = 'publish'; // 설정 화면에 머물러 공유 링크를 보여줌
+  socket.emit('saveChatDef', { def }); // 최신 정의로 저장 후
+  const v = cpVisibilityEl.value;
+  if (v === 'private') socket.emit('unpublishChat');
+  else socket.emit('publishChat', { visibility: v });
+});
 cpAddImageBtn.addEventListener('click', () => cpImageFileEl.click());
 cpImageFileEl.addEventListener('change', () => {
   uploadImageFiles(cpImageFileEl.files);
@@ -1103,6 +1218,7 @@ cpSaveBtn.addEventListener('click', () => {
     return;
   }
   chatSetupErrorEl.classList.add('hidden');
+  pendingSetupAction = 'save';
   socket.emit('saveChatDef', { def });
 });
 chatForm.addEventListener('submit', (e) => {
