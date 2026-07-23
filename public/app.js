@@ -123,7 +123,11 @@ const cpUserPersonaEl = document.getElementById('cpUserPersona');
 const chatSetupErrorEl = document.getElementById('chatSetupError');
 const cpCancelBtn = document.getElementById('cpCancel');
 const cpSaveBtn = document.getElementById('cpSave');
+const cpImagesEl = document.getElementById('cpImages');
+const cpImageFileEl = document.getElementById('cpImageFile');
+const cpAddImageBtn = document.getElementById('cpAddImage');
 let chatChars = [{ name: '', description: '' }]; // 설정 폼의 캐릭터 편집 상태
+let chatImages = []; // 설정 폼의 이미지 편집 상태 [{id, tag, description}]
 
 let authMode = 'login'; // 'login' | 'signup'
 let mySettings = null; // {provider, model, baseURL, keys:{provider:bool}}
@@ -200,7 +204,7 @@ function wireSocket() {
   socket.on('chats', (data) => renderChatBar(data));
   socket.on('chatState', (data) => applyChatState(data));
   socket.on('chatMessage', (m) => {
-    appendChatMsg(m.role, m.content);
+    appendChatMsg(m.role, m.content, m.imageId);
     scrollChat();
   });
   socket.on('chatThinking', ({ on }) => {
@@ -373,11 +377,21 @@ function scrollChat() {
   chatLogEl.scrollTop = chatLogEl.scrollHeight;
 }
 
-/** 챗 메시지 버블 추가. role: 'user' | 'assistant'. */
-function appendChatMsg(role, content) {
+/** 챗 메시지 버블 추가. role: 'user' | 'assistant'. imageId가 있으면 이미지도 표시. */
+function appendChatMsg(role, content, imageId) {
   const div = document.createElement('div');
   div.className = 'entry ' + (role === 'user' ? 'player' : 'gm');
-  div.textContent = content;
+  if (imageId) {
+    const img = document.createElement('img');
+    img.className = 'chat-img';
+    img.src = `/img/${imageId}`;
+    img.alt = '장면 이미지';
+    img.loading = 'lazy';
+    div.appendChild(img);
+  }
+  const p = document.createElement('div');
+  p.textContent = content;
+  div.appendChild(p);
   chatLogInnerEl.appendChild(div);
 }
 
@@ -440,7 +454,7 @@ function applyChatState(data) {
     openChatSetupForm(data);
   } else {
     chatLogInnerEl.innerHTML = '';
-    (data.messages || []).forEach((m) => appendChatMsg(m.role, m.content));
+    (data.messages || []).forEach((m) => appendChatMsg(m.role, m.content, m.imageId));
     setChatBusy(false);
     showChat();
     scrollChat();
@@ -485,6 +499,71 @@ function renderCharEditors() {
   });
 }
 
+/** 업로드된 이미지 목록(썸네일 + 태그 + 설명 + 삭제) 렌더. */
+function renderImageEditors() {
+  cpImagesEl.innerHTML = '';
+  chatImages.forEach((im, i) => {
+    const row = document.createElement('div');
+    row.className = 'cp-image';
+    const thumb = document.createElement('img');
+    thumb.src = `/img/${im.id}`;
+    thumb.alt = im.tag || '이미지';
+    row.appendChild(thumb);
+
+    const fields = document.createElement('div');
+    fields.className = 'cp-image-fields';
+    const tagIn = document.createElement('input');
+    tagIn.type = 'text';
+    tagIn.maxLength = 40;
+    tagIn.placeholder = '태그 (예: 루나-미소)';
+    tagIn.value = im.tag;
+    tagIn.addEventListener('input', () => (chatImages[i].tag = tagIn.value));
+    const descIn = document.createElement('input');
+    descIn.type = 'text';
+    descIn.maxLength = 200;
+    descIn.placeholder = '언제 보여줄지 설명 (선택)';
+    descIn.value = im.description;
+    descIn.addEventListener('input', () => (chatImages[i].description = descIn.value));
+    fields.appendChild(tagIn);
+    fields.appendChild(descIn);
+    row.appendChild(fields);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'cp-char-del';
+    del.textContent = '✕';
+    del.title = '이 이미지 빼기';
+    del.addEventListener('click', () => {
+      chatImages.splice(i, 1);
+      renderImageEditors();
+    });
+    row.appendChild(del);
+    cpImagesEl.appendChild(row);
+  });
+}
+
+/** 파일을 data URL로 읽어 업로드하고 목록에 추가. */
+function uploadImageFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  chatSetupErrorEl.classList.add('hidden');
+  list.forEach((file) => {
+    if (chatImages.length >= 16) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = await api('/api/upload', { dataUrl: reader.result });
+        chatImages.push({ id: data.id, tag: '', description: '' });
+        renderImageEditors();
+      } catch (e) {
+        chatSetupErrorEl.textContent = `이미지 업로드 실패: ${e.message}`;
+        chatSetupErrorEl.classList.remove('hidden');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /** 챗 설정 폼을 현재 정의로 채우고 표시(편집/신규 공용). */
 function openChatSetupForm(data) {
   const d = (data && data.def) || {};
@@ -494,6 +573,12 @@ function openChatSetupForm(data) {
     ? d.characters.map((c) => ({ name: c.name || '', description: c.description || '' }))
     : [{ name: '', description: '' }];
   renderCharEditors();
+  chatImages = (d.images || []).map((im) => ({
+    id: im.id,
+    tag: im.tag || '',
+    description: im.description || '',
+  }));
+  renderImageEditors();
   cpScenarioEl.value = d.scenario || '';
   cpGreetingEl.value = d.greeting || '';
   cpUserPersonaEl.value = d.userPersona || '';
@@ -508,6 +593,9 @@ function collectDef() {
     characters: chatChars
       .map((c) => ({ name: (c.name || '').trim(), description: (c.description || '').trim() }))
       .filter((c) => c.name),
+    images: chatImages
+      .map((im) => ({ id: im.id, tag: (im.tag || '').trim(), description: (im.description || '').trim() }))
+      .filter((im) => im.id && im.tag),
     scenario: cpScenarioEl.value.trim(),
     greeting: cpGreetingEl.value.trim(),
     userPersona: cpUserPersonaEl.value.trim(),
@@ -996,6 +1084,11 @@ cpAddCharBtn.addEventListener('click', () => {
   if (chatChars.length >= 8) return;
   chatChars.push({ name: '', description: '' });
   renderCharEditors();
+});
+cpAddImageBtn.addEventListener('click', () => cpImageFileEl.click());
+cpImageFileEl.addEventListener('change', () => {
+  uploadImageFiles(cpImageFileEl.files);
+  cpImageFileEl.value = ''; // 같은 파일 다시 선택 가능하게
 });
 cpSaveBtn.addEventListener('click', () => {
   const def = collectDef();

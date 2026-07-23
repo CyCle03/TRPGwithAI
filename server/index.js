@@ -14,6 +14,8 @@ const auth = require('./auth');
 const store = require('./store');
 const chatStore = require('./chatStore');
 const chat = require('./chat');
+const uploads = require('./uploads');
+const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -50,7 +52,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '8mb' })); // 이미지 업로드(base64) 여유
 const server = http.createServer(app);
 const io = new Server(server);
 
@@ -160,6 +162,29 @@ app.post('/api/model-test', async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// 이미지 업로드 (base64 data URL). 로그인 필요.
+app.post('/api/upload', (req, res) => {
+  const uid = userIdFromReq(req);
+  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  try {
+    const { dataUrl } = req.body || {};
+    const { id } = uploads.saveDataUrl(dataUrl);
+    res.json({ id, url: `/img/${id}` });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 업로드 이미지 서빙. 공유된 정의를 다른 사용자가 플레이할 수 있어야 하므로
+// id를 아는 사람은 접근 가능(추측 불가한 랜덤 id).
+app.get('/img/:id', (req, res) => {
+  const f = uploads.resolve(req.params.id);
+  if (!f) return res.status(404).end();
+  res.setHeader('Content-Type', f.mime);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  fs.createReadStream(f.path).pipe(res);
 });
 
 app.get('/api/health', (req, res) => {
@@ -560,9 +585,12 @@ io.on('connection', (socket) => {
         system,
         recent
       );
-      const clean = String(reply || '').trim();
-      c.messages.push({ role: 'assistant', content: clean });
-      emit('chatMessage', { role: 'assistant', content: clean });
+      // [img:태그] 마커를 뽑아 이미지로 치환(본문에서는 제거)
+      const { text: clean, imageId } = chat.extractImage(reply, c.def.images);
+      const msg = { role: 'assistant', content: clean };
+      if (imageId) msg.imageId = imageId;
+      c.messages.push(msg);
+      emit('chatMessage', msg);
     } catch (e) {
       console.error(e);
       c.messages.pop(); // 실패 시 방금 넣은 사용자 메시지 롤백(재전송 가능)

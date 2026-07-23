@@ -194,6 +194,14 @@
         <div id="cpCharacters" class="cp-characters"></div>
         <button type="button" id="cpAddChar" class="ghost cp-add">＋ 캐릭터 추가</button>
 
+        <label>이미지 <span class="opt">(선택 · 태그를 달면 AI가 상황에 맞춰 보여줍니다)</span></label>
+        <div id="cpImages" class="cp-images"></div>
+        <input type="file" id="cpImageFile" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
+        <button type="button" id="cpAddImage" class="ghost cp-add">＋ 이미지 추가</button>
+        <p class="hint">
+          2MB 이하 png/jpg/webp/gif, 최대 16장. 태그 예: <b>루나-미소</b>, <b>밤의 탑</b>, <b>전투</b>
+        </p>
+
         <label>시작 상황 / 시나리오 <span class="opt">(선택)</span></label>
         <textarea id="cpScenario" rows="3" placeholder="첫 장면, 어디서 어떻게 시작하는지"></textarea>
 

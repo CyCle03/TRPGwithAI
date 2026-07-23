@@ -11,6 +11,11 @@
 
 const MAX_CHAT_HISTORY = 30; // API에 보내는 최근 메시지 수
 const MAX_CHARACTERS = 8;
+const MAX_IMAGES = 16;
+
+// AI가 장면에 맞는 이미지를 고를 때 쓰는 인라인 마커. 구조화 출력 대신 이 방식을 쓰면
+// JSON 스키마를 지원하지 않는 제공자(Ollama 등)에서도 동일하게 동작한다.
+const IMG_MARKER_RE = /\[img:\s*([^\]]{1,60})\]/i;
 
 /** 정의 입력 정규화(길이 제한). 최소 1명의 이름 있는 캐릭터가 필요. */
 function normalizeDef(raw) {
@@ -23,14 +28,37 @@ function normalizeDef(raw) {
     }))
     .filter((c) => c.name)
     .slice(0, MAX_CHARACTERS);
+  let images = Array.isArray(d.images) ? d.images : [];
+  images = images
+    .map((im) => ({
+      id: String((im && im.id) || '').replace(/[^a-f0-9]/gi, '').slice(0, 40),
+      tag: String((im && im.tag) || '').trim().slice(0, 40),
+      description: String((im && im.description) || '').trim().slice(0, 200),
+    }))
+    .filter((im) => im.id && im.tag)
+    .slice(0, MAX_IMAGES);
   return {
     worldTitle: String(d.worldTitle || '').trim().slice(0, 80),
     worldLore: String(d.worldLore || '').slice(0, 6000),
     characters,
+    images,
     scenario: String(d.scenario || '').slice(0, 3000),
     greeting: String(d.greeting || '').slice(0, 2000),
     userPersona: String(d.userPersona || '').slice(0, 2000),
   };
+}
+
+/**
+ * AI 응답에서 [img:태그] 마커를 뽑아 이미지 id로 바꾸고, 본문에서는 마커를 제거한다.
+ * @returns {{text:string, imageId:string|null}}
+ */
+function extractImage(text, images) {
+  const raw = String(text || '');
+  const m = IMG_MARKER_RE.exec(raw);
+  if (!m) return { text: raw.trim(), imageId: null };
+  const tag = m[1].trim().toLowerCase();
+  const found = (images || []).find((im) => String(im.tag).trim().toLowerCase() === tag);
+  return { text: raw.replace(IMG_MARKER_RE, '').replace(/\n{3,}/g, '\n\n').trim(), imageId: found ? found.id : null };
 }
 
 /** 구버전 단일 persona({name,description,...}) → def 로 변환. */
@@ -96,6 +124,17 @@ function buildSystemPrompt(def) {
   if (d.scenario) lines.push(`\n[현재 상황 / 시나리오]\n${d.scenario}`);
   if (d.userPersona) lines.push(`\n[상대(사용자) 페르소나]\n${d.userPersona}`);
 
+  const imgs = (d.images || []).filter((im) => im.tag);
+  if (imgs.length) {
+    lines.push(
+      '\n[사용할 수 있는 이미지]\n' +
+        imgs.map((im) => `- ${im.tag}${im.description ? `: ${im.description}` : ''}`).join('\n') +
+        '\n장면에 딱 맞는 이미지가 있으면 응답 안에 [img:태그] 를 정확히 한 번만 넣어라(예: [img:밤의 탑]).' +
+        ' 위 목록에 없는 태그는 절대 지어내지 말고, 어울리는 게 없으면 아무것도 넣지 마라.' +
+        ' 매 응답마다 넣을 필요는 없다 — 장면이 바뀌거나 인상적인 순간에만 써라.'
+    );
+  }
+
   lines.push(
     '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 응답은 대화가 이어지도록 적당한 길이로. 장면 묘사는 서술로, 대사는 따옴표로.'
   );
@@ -108,6 +147,8 @@ module.exports = {
   migrateDef,
   isConfigured,
   displayName,
+  extractImage,
   MAX_CHAT_HISTORY,
   MAX_CHARACTERS,
+  MAX_IMAGES,
 };

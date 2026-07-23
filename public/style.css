@@ -249,6 +249,51 @@ select#setProvider {
 .cp-add {
   margin-bottom: 8px;
 }
+/* 이미지 편집기 */
+.cp-images {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cp-image {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.cp-image img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  background: #000;
+}
+.cp-image-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.cp-image-fields input {
+  margin-bottom: 0;
+}
+/* 대화 중 표시되는 장면 이미지 */
+.chat-img {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
 .disclaimer {
   margin-top: 16px;
   padding: 12px;
