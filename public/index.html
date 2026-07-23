@@ -8,10 +8,8 @@
   </head>
   <body>
     <!-- 랜딩 배경 영상 (로그인/캐릭터 생성 화면 뒤, 게임 중엔 숨김) -->
-    <!-- 루프 최적화(카메라 고정) 앰비언트 클립 → 연속 반복 재생 -->
-    <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto">
-      <source src="assets/intro.mp4" type="video/mp4" />
-    </video>
+    <!-- 루프 최적화 앰비언트 클립 4종 → 접속마다 랜덤 1개 재생(소스는 app.js가 설정) -->
+    <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto"></video>
     <div id="bgOverlay" class="bg-overlay"></div>
 
     <!-- 우측 상단 사용자 바 (로그인 후) -->

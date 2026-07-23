@@ -195,6 +195,12 @@ function updateModelNote() {
 
 // ---------- 화면 전환 ----------
 const bgVideo = document.getElementById('bgVideo');
+// 랜딩 배경 앰비언트 클립 4종 — 접속(로드)마다 랜덤 1개 선택.
+const BG_VIDEOS = ['assets/intro1.mp4', 'assets/intro2.mp4', 'assets/intro3.mp4', 'assets/intro4.mp4'];
+if (bgVideo) {
+  bgVideo.src = BG_VIDEOS[Math.floor(Math.random() * BG_VIDEOS.length)];
+  bgVideo.play().catch(() => {});
+}
 /** 랜딩(로그인·생성) 화면에서만 배경 영상 재생, 게임 중엔 정지. */
 function setLandingBg(on) {
   document.body.classList.toggle('in-game', !on);
