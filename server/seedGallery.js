@@ -12,55 +12,55 @@ const SAMPLE_IMAGES = [
     id: '5a11e0ba51a00001',
     file: 'harbor.png',
     tag: '안개 부두',
-    description: '부두·항구 야외 장면. 도착하거나 배를 보거나 리안과 부두에서 대화할 때',
+    description: '부두·항구 야외 장면',
   },
   {
     id: '5a11e0ba51a00002',
     file: 'lighthouse.png',
     tag: '등대',
-    description: '등대가 언급되거나 등대로 향할 때, 등대 불빛의 비밀이 드러날 때',
+    description: '등대가 보이거나 등대로 향할 때',
   },
   {
     id: '5a11e0ba51a00003',
     file: 'tavern.png',
     tag: '젖은 등불',
-    description: '선술집 안으로 들어가거나 마르타와 대화할 때',
+    description: '선술집 실내 장면',
   },
   {
     id: '5a11e0ba51a00004',
     file: 'nightsea.png',
     tag: '밤바다',
-    description: '바다·바다의 노래·배의 실종 등 불길한 장면',
+    description: '밤바다·파도·검은 수면',
   },
   {
     id: '5a11e0ba51a00005',
     file: 'lian.png',
     tag: '리안',
-    description: '등대지기 리안이 말하거나 전면에 나설 때',
+    description: '리안이 대화의 중심일 때',
   },
   {
     id: '5a11e0ba51a00006',
     file: 'marta.png',
     tag: '마르타',
-    description: '선술집 주인 마르타가 말하거나 전면에 나설 때',
+    description: '마르타가 대화의 중심일 때',
   },
   {
     id: '5a11e0ba51a00007',
     file: 'seren.png',
     tag: '세렌',
-    description: '기억을 잃은 소녀 세렌이 말하거나 전면에 나설 때',
+    description: '세렌이 대화의 중심일 때',
   },
   {
     id: '5a11e0ba51a00008',
     file: 'seasong.png',
     tag: '바다의 노래',
-    description: '바다 밑의 노래가 들리거나 환영·홀림이 일어나는 순간',
+    description: '바다의 노래가 들리거나 홀리는 순간',
   },
   {
     id: '5a11e0ba51a00009',
     file: 'ghostship.png',
     tag: '사라진 배',
-    description: '실종된 배나 유령선이 등장하는 장면',
+    description: '실종된 배·유령선이 나올 때',
   },
 ];
 
@@ -75,6 +75,7 @@ const SEED_KEY = 'sampleV1';
 const IMAGE_SEED_KEY = 'sampleImagesV2';
 const OWNER_SEED_KEY = 'sampleOwnerV1';
 const SAMPLE_ID_KEY = 'sampleEntryId'; // 소유권이 바뀌어도 샘플을 찾기 위한 id 기록
+const DESC_SEED_KEY = 'sampleImageDescV1'; // 겹치던 태그 설명 정정
 // 샘플을 넘겨줄 실제 계정 아이디 (.env의 SAMPLE_OWNER로 변경 가능)
 const SAMPLE_OWNER = process.env.SAMPLE_OWNER || 'elcher';
 
@@ -153,9 +154,47 @@ function importSampleImages() {
 }
 
 function seed() {
-  importSampleImages(); // 파일은 매번 확인(없으면 복사, 있으면 건너뜀)
+  importSampleImages(); // 파일은 매번 확인(없거나 바뀌었으면 복사)
   ensureSampleEntry(); // 등록 / 이미지 back-fill
+  refreshImageDescriptions(); // 태그 설명 정정(겹치는 설명이 오작동을 유발했음)
   transferSampleOwner(); // 실제 계정으로 소유권 이관
+}
+
+/**
+ * 샘플 이미지의 태그 설명을 최신값으로 한 번 갱신한다.
+ * 초기 설명이 서로 겹쳐서("선술집…마르타와 대화할 때") AI가 인물 태그 대신
+ * 장소 이미지를 계속 고르는 문제가 있었다. 다른 필드는 건드리지 않는다.
+ */
+function refreshImageDescriptions() {
+  try {
+    if (publish.hasSeed(DESC_SEED_KEY)) return;
+    const entry = findSampleEntry();
+    if (!entry || !entry.def) return;
+    const canon = new Map(SAMPLE_IMAGES.map((im) => [im.id, im]));
+    let changed = 0;
+    const images = (entry.def.images || []).map((im) => {
+      const c = canon.get(im.id);
+      if (!c || (im.tag === c.tag && im.description === c.description)) return im;
+      changed++;
+      return { id: im.id, tag: c.tag, description: c.description };
+    });
+    if (!changed) {
+      publish.markSeed(DESC_SEED_KEY);
+      return;
+    }
+    publish.publish({
+      pubId: entry.id,
+      ownerId: entry.ownerId,
+      ownerName: entry.ownerName,
+      def: chat.normalizeDef({ ...entry.def, images }),
+      visibility: entry.visibility,
+      title: entry.title,
+    });
+    publish.markSeed(DESC_SEED_KEY);
+    console.log('🏷️  샘플 이미지 태그 설명', changed, '건을 정정했습니다.');
+  } catch (e) {
+    console.error('샘플 태그 설명 갱신 실패:', e.message);
+  }
 }
 
 /** 샘플 공개 항목을 등록하거나, 이미지가 빠져 있으면 채운다. */

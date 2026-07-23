@@ -937,8 +937,17 @@ io.on('connection', (socket) => {
       }
       // [img:태그] 마커를 뽑아 이미지로 치환(본문에서는 제거)
       const { text: clean, imageId } = chat.extractImage(reply, c.def.images);
+      // 직전에 보여준 이미지와 같으면 생략한다(같은 그림이 계속 반복되는 것 방지)
+      let lastImg = null;
+      for (let i = c.messages.length - 1; i >= 0; i--) {
+        const m = c.messages[i];
+        if (m.role === 'assistant' && m.imageId) {
+          lastImg = m.imageId;
+          break;
+        }
+      }
       const msg = { role: 'assistant', content: clean };
-      if (imageId) msg.imageId = imageId;
+      if (imageId && imageId !== lastImg) msg.imageId = imageId;
       c.messages.push(msg);
       emit('chatMessage', msg);
     } catch (e) {

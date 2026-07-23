@@ -62,7 +62,10 @@ function importFile(srcPath, id, ext = 'png') {
   if (!safe || !fs.existsSync(srcPath)) return null;
   ensureDir();
   const dest = path.join(UP_DIR, `${safe}.${ext}`);
-  if (!fs.existsSync(dest)) fs.copyFileSync(srcPath, dest);
+  // 내용이 바뀐 경우(샘플 이미지 교체)도 반영되도록 크기가 다르면 덮어쓴다.
+  const differs =
+    !fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(srcPath).size;
+  if (differs) fs.copyFileSync(srcPath, dest);
   return safe;
 }
 
