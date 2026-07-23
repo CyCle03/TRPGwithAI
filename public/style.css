@@ -12,6 +12,7 @@
   --state: #7fd48a;
   --danger: #e57373;
   --border: #3a322c;
+  --topbar: 52px; /* 상단 고정 유저바 높이만큼 콘텐츠를 내리는 여백 */
 }
 
 * {
@@ -180,6 +181,8 @@ select#setProvider {
 .chat-screen {
   display: flex;
   height: 100vh;
+  box-sizing: border-box;
+  padding-top: var(--topbar); /* 고정 유저바와 겹치지 않게 */
 }
 .chat-screen .log-pane {
   flex: 1;
@@ -581,6 +584,8 @@ button.primary:disabled {
   display: grid;
   grid-template-columns: 260px 1fr 320px;
   height: 100vh;
+  box-sizing: border-box;
+  padding-top: var(--topbar); /* 고정 유저바와 겹치지 않게 */
 }
 
 /* 좌측 필드 패널 (적/동료) */
@@ -659,6 +664,15 @@ button.primary:disabled {
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+  align-items: center;
+}
+/* 모델명이 길어도 헤더가 넘치지 않게 버튼 라벨 말줄임 */
+#gameModelBtn,
+#chatModelBtn {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* 슬롯(저장 게임) 칩 바 */
 .slot-bar {
@@ -880,8 +894,7 @@ button.ghost.pulse {
 /* ---------- 상태창 ---------- */
 .status-pane {
   background: var(--panel);
-  /* 상단 고정 유저바(사용자명·설정·로그아웃)와 캐릭터 이름이 겹치지 않도록 여백 확보 */
-  padding: 54px 18px 18px;
+  padding: 18px;
   overflow-y: auto;
 }
 .status-pane h2 {
