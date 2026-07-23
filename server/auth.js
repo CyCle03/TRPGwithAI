@@ -140,7 +140,7 @@ function createUser(username, password) {
     username,
     passHash: hashPassword(password),
     createdAt: new Date().toISOString(),
-    settings: { provider: 'gemini', model: '', apiKeyEnc: null, baseURL: '' },
+    settings: { provider: 'gemini', model: '', baseURL: '', keys: {} },
   };
   db.byName[key] = id;
   saveUsers(db);
@@ -162,27 +162,46 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
-/** AI 호출용: 복호화된 키 포함 설정 반환 (내부 전용, 클라 노출 금지). */
-function getAiConfig(id) {
+/** 제공자별 암호화 키 맵을 반환(구버전 apiKeyEnc는 provider 키로 폴백). */
+function keysOf(s) {
+  if (s.keys && typeof s.keys === 'object') return s.keys;
+  if (s.apiKeyEnc) return { [s.provider || 'gemini']: s.apiKeyEnc };
+  return {};
+}
+
+/**
+ * AI 호출용: 특정 제공자의 복호화 키 + baseURL 반환 (내부 전용, 클라 노출 금지).
+ * @param {string} id 사용자 id
+ * @param {string} provider 게임이 선택한 제공자
+ */
+function getAiConfig(id, provider) {
   const db = loadUsers();
   const u = db.users[id];
-  if (!u) return null;
+  if (!u) return { provider, apiKey: null, baseURL: '' };
   const s = u.settings || {};
+  const keys = keysOf(s);
+  const enc = keys[provider];
   return {
-    provider: s.provider || 'gemini',
-    model: s.model || '',
+    provider,
+    apiKey: enc ? decrypt(enc) : null,
     baseURL: s.baseURL || '',
-    apiKey: s.apiKeyEnc ? decrypt(s.apiKeyEnc) : null,
   };
 }
 
 const VALID_PROVIDERS = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'];
 
+/**
+ * 설정 갱신. provider/model/baseURL은 "새 게임 기본값", apiKey는 선택한 provider의 키.
+ */
 function updateSettings(id, { provider, model, apiKey, baseURL }) {
   const db = loadUsers();
   const u = db.users[id];
   if (!u) throw new Error('사용자를 찾을 수 없습니다.');
   const s = u.settings || {};
+  // 구버전 단일 키 → 제공자별 키맵으로 마이그레이션
+  if (!s.keys) s.keys = keysOf(s);
+  delete s.apiKeyEnc;
+
   if (VALID_PROVIDERS.includes(provider)) s.provider = provider;
   if (typeof model === 'string') s.model = model.trim().slice(0, 60);
   // 커스텀 엔드포인트 주소(비밀 아님). http(s)만 허용.
@@ -191,28 +210,31 @@ function updateSettings(id, { provider, model, apiKey, baseURL }) {
     if (b === '' || /^https?:\/\//i.test(b)) s.baseURL = b;
     else throw new Error('엔드포인트 주소는 http:// 또는 https:// 로 시작해야 합니다.');
   }
-  // apiKey: 비어있지 않은 값이 오면 교체, 빈 문자열이면 유지, null이면 삭제
+  // 선택한 제공자의 키를 등록/삭제
+  const p = VALID_PROVIDERS.includes(provider) ? provider : s.provider;
   if (typeof apiKey === 'string' && apiKey.trim()) {
-    s.apiKeyEnc = encrypt(apiKey.trim());
+    s.keys[p] = encrypt(apiKey.trim());
   } else if (apiKey === null) {
-    s.apiKeyEnc = null;
+    delete s.keys[p];
   }
   u.settings = s;
   saveUsers(db);
   return publicUser(u);
 }
 
-/** 클라이언트에 안전하게 노출할 사용자 정보 (비밀번호·키 제외, 키 설정 여부만). */
+/** 클라이언트에 안전하게 노출할 사용자 정보 (비밀번호·키 제외, 제공자별 키 존재 여부만). */
 function publicUser(u) {
   const s = u.settings || {};
+  const keys = keysOf(s);
   return {
     id: u.id,
     username: u.username,
     settings: {
-      provider: s.provider || 'gemini',
-      model: s.model || '',
+      provider: s.provider || 'gemini', // 새 게임 기본 제공자
+      model: s.model || '', // 새 게임 기본 모델
       baseURL: s.baseURL || '', // 비밀 아님(엔드포인트 주소)
-      hasApiKey: !!s.apiKeyEnc, // 키 존재 여부만, 값은 절대 안 보냄
+      // 제공자별 키 등록 여부만(값은 절대 안 보냄). 예: {gemini:true, anthropic:false...}
+      keys: Object.fromEntries(Object.keys(keys).map((p) => [p, true])),
     },
   };
 }

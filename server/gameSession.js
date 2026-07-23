@@ -9,7 +9,7 @@ const {
   applyLevelUp,
   xpToLevel,
 } = require('./dungeonWorld');
-const store = require('./store');
+// 영속화는 index.js(슬롯 매니저)가 담당한다 — GameSession은 게임 상태만 관리.
 
 /**
  * 게임 세션 오케스트레이션.
@@ -110,7 +110,6 @@ class GameSession {
     this.messages.push(kickoff);
 
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
-    store.save(this.userId, this.toJSON());
   }
 
   /** 플레이어 행동 처리 — 핵심 루프 진입점. */
@@ -140,7 +139,6 @@ class GameSession {
 
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: true });
     this._checkLevelUp(emit);
-    store.save(this.userId, this.toJSON());
   }
 
   /** 현재 상황에서 취할 만한 행동 몇 가지를 AI에게 받아 제안한다(이야기 진행 안 함). */
@@ -190,7 +188,6 @@ class GameSession {
     emit('levelUpDone', {});
     // 남은 XP로 연속 레벨업이 가능하면 다시 띄운다.
     this._checkLevelUp(emit);
-    store.save(this.userId, this.toJSON());
   }
 
   /**

@@ -556,10 +556,75 @@ button.primary:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 18px;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   font-weight: 700;
   background: var(--panel);
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+/* 슬롯(저장 게임) 칩 바 */
+.slot-bar {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  min-width: 0;
+}
+.slot-chip {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.slot-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.slot-chip .slot-main {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slot-chip.active .slot-main {
+  color: var(--accent);
+}
+.slot-chip .slot-main:hover {
+  color: var(--text);
+}
+.slot-chip .slot-del {
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  padding: 0 7px;
+  cursor: pointer;
+}
+.slot-chip .slot-del:hover {
+  color: var(--danger);
+}
+#gameModelBtn.warn {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+#gameModelBtn.warn:hover {
+  color: var(--danger);
 }
 button.ghost {
   background: transparent;

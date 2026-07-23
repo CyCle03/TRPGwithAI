@@ -135,24 +135,104 @@ io.use((socket, next) => {
   next();
 });
 
-// 사용자별 세션 캐시 (메모리)
-const sessions = new Map();
-function getSession(userId) {
-  if (!sessions.has(userId)) sessions.set(userId, new GameSession(userId, store.load(userId)));
-  return sessions.get(userId);
+// 사용자별 게임 슬롯 캐시 (메모리). userId -> { activeId, slots:{id:{id, ai, game}} }
+const userGames = new Map();
+const crypto = require('crypto');
+function newId() {
+  return crypto.randomUUID().slice(0, 8);
+}
+function defaultAiFor(user) {
+  return { provider: user?.settings?.provider || 'gemini', model: user?.settings?.model || '' };
+}
+
+/** 사용자의 모든 슬롯을 로드(없으면 빈 슬롯 1개 생성). */
+function loadUserGames(userId, user) {
+  if (userGames.has(userId)) return userGames.get(userId);
+  const dAi = defaultAiFor(user);
+  const norm = store.normalize(store.loadRaw(userId), dAi);
+  const slots = {};
+  for (const [id, s] of Object.entries(norm.slots)) {
+    slots[id] = { id, ai: s.ai || { ...dAi }, game: new GameSession(userId, s.session) };
+  }
+  let activeId = norm.activeId && slots[norm.activeId] ? norm.activeId : Object.keys(slots)[0] || null;
+  if (!activeId) {
+    const id = newId();
+    slots[id] = { id, ai: { ...dAi }, game: new GameSession(userId, null) };
+    activeId = id;
+  }
+  const ug = { activeId, slots };
+  userGames.set(userId, ug);
+  return ug;
+}
+
+function persist(userId, ug) {
+  const slots = {};
+  for (const [id, s] of Object.entries(ug.slots)) {
+    slots[id] = { id, ai: s.ai, session: s.game.toJSON() };
+  }
+  store.save(userId, { activeId: ug.activeId, slots });
+}
+
+/** 슬롯 목록(클라 표시용 메타). */
+function slotList(ug) {
+  return {
+    activeId: ug.activeId,
+    max: store.MAX_SLOTS,
+    slots: Object.values(ug.slots).map((s) => ({
+      id: s.id,
+      hasCharacter: s.game.hasCharacter(),
+      name: s.game.character ? s.game.character.name : null,
+      className: s.game.character ? s.game.character.className : null,
+      level: s.game.character ? s.game.character.level || 1 : null,
+      dead: !!s.game.dead,
+      ai: { provider: s.ai.provider || 'gemini', model: s.ai.model || '' },
+    })),
+  };
+}
+
+/** 한 슬롯의 전체 게임 상태(전환/초기화 시 클라 재렌더용). */
+function gameState(slot) {
+  const g = slot.game;
+  return {
+    slotId: slot.id,
+    ai: { provider: slot.ai.provider || 'gemini', model: slot.ai.model || '' },
+    hasCharacter: g.hasCharacter(),
+    character: g.character,
+    log: g.log,
+    enemies: g.enemies,
+    companions: g.companions,
+    dead: g.dead,
+    pendingLevelUp: g.pendingLevelUp,
+  };
 }
 
 io.on('connection', (socket) => {
   const userId = socket.userId;
-  const session = getSession(userId);
-  const emit = (event, payload) => socket.emit(event, payload);
   const user = auth.getUserById(userId);
+  const ug = loadUserGames(userId, user);
+  const emit = (event, payload) => socket.emit(event, payload);
+  const active = () => ug.slots[ug.activeId];
+  const activeGame = () => active() && active().game;
 
-  // AI 액션 전에 최신 설정 주입 + 키 확인
+  // AI 액션 전에 활성 게임의 모델 + 사용자 키를 주입하고 키/주소를 확인.
   function ensureAi() {
-    session.setAiConfig(auth.getAiConfig(userId));
-    if (!session.aiConfig || !session.aiConfig.apiKey) {
-      emit('error', { message: 'AI API 키가 없습니다. 우측 상단 ⚙ 설정에서 본인 키를 등록하세요.' });
+    const slot = active();
+    if (!slot) {
+      emit('error', { message: '활성 게임이 없습니다.' });
+      return false;
+    }
+    const provider = slot.ai.provider || 'gemini';
+    const cfg = auth.getAiConfig(userId, provider);
+    slot.game.setAiConfig({ provider, model: slot.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+    if (provider === 'custom') {
+      if (!cfg.baseURL) {
+        emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
+        return false;
+      }
+      return true;
+    }
+    if (!cfg.apiKey) {
+      emit('error', { message: `현재 게임의 제공자(${provider}) API 키가 없습니다. ⚙ 설정에서 등록하세요.` });
       return false;
     }
     return true;
@@ -161,83 +241,132 @@ io.on('connection', (socket) => {
   socket.emit('init', {
     username: user ? user.username : null,
     settings: user ? user.settings : null,
-    defaultModels: Object.fromEntries(
-      aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])
-    ),
+    providers: aiGM.PROVIDER_NAMES,
+    defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
     classes: listClasses(),
     statKeys: STAT_KEYS,
     standardArray: STANDARD_ARRAY,
-    hasCharacter: session.hasCharacter(),
-    character: session.character,
-    log: session.log,
-    enemies: session.enemies,
-    companions: session.companions,
-    dead: session.dead,
+    ...gameState(active()),
   });
-  if (session.pendingLevelUp) socket.emit('levelUp', session.pendingLevelUp);
-  if (session.dead) socket.emit('gameOver', { reason: 'dead' });
+  emit('slots', slotList(ug));
+  if (activeGame().pendingLevelUp) emit('levelUp', activeGame().pendingLevelUp);
+  if (activeGame().dead) emit('gameOver', { reason: 'dead' });
 
   socket.on('createCharacter', async (payload) => {
-    if (session.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });
+    const g = activeGame();
+    if (!g) return emit('error', { message: '활성 게임이 없습니다.' });
+    if (g.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });
     if (!ensureAi()) return;
-    session.busy = true;
+    g.busy = true;
     try {
-      await session.createCharacter(emit, payload || {});
+      await g.createCharacter(emit, payload || {});
     } catch (e) {
       console.error(e);
       emit('error', { message: '캐릭터 생성 실패: ' + e.message });
     } finally {
-      session.busy = false;
+      g.busy = false;
     }
+    persist(userId, ug);
+    emit('slots', slotList(ug));
   });
 
   socket.on('playerAction', async (payload) => {
-    if (session.busy) return emit('error', { message: 'GM이 아직 응답 중입니다.' });
+    const g = activeGame();
+    if (!g) return emit('error', { message: '활성 게임이 없습니다.' });
+    if (g.busy) return emit('error', { message: 'GM이 아직 응답 중입니다.' });
     if (!ensureAi()) return;
-    session.busy = true;
+    g.busy = true;
     try {
-      await session.playerAction(emit, payload?.text);
+      await g.playerAction(emit, payload && payload.text);
     } catch (e) {
       console.error(e);
       emit('error', { message: '행동 처리 실패: ' + e.message });
     } finally {
-      session.busy = false;
+      g.busy = false;
     }
+    persist(userId, ug);
+    emit('slots', slotList(ug));
   });
 
   socket.on('suggestActions', async () => {
-    if (session.busy) return;
+    const g = activeGame();
+    if (!g || g.busy) return;
     if (!ensureAi()) return;
-    session.busy = true;
+    g.busy = true;
     try {
-      await session.suggestActions(emit);
+      await g.suggestActions(emit);
     } catch (e) {
       console.error(e);
       emit('error', { message: '행동 제안 실패: ' + e.message });
     } finally {
-      session.busy = false;
+      g.busy = false;
     }
   });
 
   socket.on('levelUpChoice', (payload) => {
+    const g = activeGame();
+    if (!g) return;
     try {
-      session.levelUpChoice(emit, payload || {});
+      g.levelUpChoice(emit, payload || {});
     } catch (e) {
       console.error(e);
       emit('error', { message: '레벨업 처리 실패: ' + e.message });
     }
+    persist(userId, ug);
+    emit('slots', slotList(ug));
   });
 
-  socket.on('resetGame', () => {
-    store.clear(userId);
-    session.character = null;
-    session.messages = [];
-    session.log = [];
-    session.summary = '';
-    session.pendingLevelUp = null;
-    session.enemies = [];
-    session.companions = [];
-    emit('reset', {});
+  // 새 게임 슬롯 생성(기존 게임 유지). 최대 MAX_SLOTS.
+  socket.on('newGame', () => {
+    if (Object.keys(ug.slots).length >= store.MAX_SLOTS) {
+      return emit('error', { message: `게임은 최대 ${store.MAX_SLOTS}개까지 저장돼요. 기존 게임을 지운 뒤 만드세요.` });
+    }
+    const id = newId();
+    ug.slots[id] = { id, ai: defaultAiFor(user), game: new GameSession(userId, null) };
+    ug.activeId = id;
+    persist(userId, ug);
+    emit('slotSwitched', gameState(ug.slots[id]));
+    emit('slots', slotList(ug));
+  });
+
+  // 다른 저장 게임으로 전환.
+  socket.on('switchSlot', (payload) => {
+    const id = payload && payload.id;
+    if (!ug.slots[id]) return emit('error', { message: '없는 게임입니다.' });
+    ug.activeId = id;
+    persist(userId, ug);
+    const slot = ug.slots[id];
+    emit('slotSwitched', gameState(slot));
+    emit('slots', slotList(ug));
+    if (slot.game.pendingLevelUp) emit('levelUp', slot.game.pendingLevelUp);
+  });
+
+  // 저장 게임 삭제. 활성이 지워지면 다른 슬롯으로, 하나도 없으면 빈 슬롯 생성.
+  socket.on('deleteSlot', (payload) => {
+    const id = payload && payload.id;
+    if (!ug.slots[id]) return;
+    delete ug.slots[id];
+    if (ug.activeId === id) ug.activeId = Object.keys(ug.slots)[0] || null;
+    if (!ug.activeId) {
+      const nid = newId();
+      ug.slots[nid] = { id: nid, ai: defaultAiFor(user), game: new GameSession(userId, null) };
+      ug.activeId = nid;
+    }
+    persist(userId, ug);
+    emit('slotSwitched', gameState(active()));
+    emit('slots', slotList(ug));
+  });
+
+  // 현재 게임의 AI 모델 변경(진행 중에도 가능).
+  socket.on('setGameModel', (payload) => {
+    const slot = active();
+    if (!slot) return;
+    const { provider, model } = payload || {};
+    if (aiGM.PROVIDER_NAMES.includes(provider)) slot.ai.provider = provider;
+    if (typeof model === 'string') slot.ai.model = model.trim().slice(0, 60);
+    persist(userId, ug);
+    emit('gameModelUpdated', { provider: slot.ai.provider || 'gemini', model: slot.ai.model || '' });
+    emit('slots', slotList(ug));
   });
 });
 

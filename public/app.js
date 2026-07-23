@@ -80,9 +80,23 @@ const settingsErrorEl = document.getElementById('settingsError');
 const settingsSaveBtn = document.getElementById('settingsSave');
 const settingsCancelBtn = document.getElementById('settingsCancel');
 
+// 슬롯(저장 게임) + 게임별 모델
+const slotBarEl = document.getElementById('slotBar');
+const gameModelBtn = document.getElementById('gameModelBtn');
+const gameModelLabelEl = document.getElementById('gameModelLabel');
+const gameModelModal = document.getElementById('gameModelModal');
+const gmProviderEl = document.getElementById('gmProvider');
+const gmModelEl = document.getElementById('gmModel');
+const gmKeyHintEl = document.getElementById('gmKeyHint');
+const gmCancelBtn = document.getElementById('gmCancel');
+const gmSaveBtn = document.getElementById('gmSave');
+const gameModelErrorEl = document.getElementById('gameModelError');
+
 let authMode = 'login'; // 'login' | 'signup'
-let mySettings = null; // {provider, model, hasApiKey}
+let mySettings = null; // {provider, model, baseURL, keys:{provider:bool}}
 let defaultModels = { gemini: '', anthropic: '' };
+let currentGameAi = { provider: 'gemini', model: '' }; // 활성 게임의 모델
+let providersList = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'];
 
 // 위저드 상태
 let classesData = [];
@@ -104,40 +118,34 @@ let luNeedMove = false;
 // ---------- 소켓 핸들러 (로그인 후 연결) ----------
 function wireSocket() {
   socket.on('init', (data) => {
-    mySettings = data.settings || { provider: 'gemini', model: '', hasApiKey: false };
+    mySettings = data.settings || { provider: 'gemini', model: '', baseURL: '', keys: {} };
+    if (!mySettings.keys) mySettings.keys = {};
     defaultModels = data.defaultModels || defaultModels;
+    if (Array.isArray(data.providers)) providersList = data.providers;
     if (data.username) userNameEl.textContent = data.username;
     userBarEl.classList.remove('hidden');
-    updateModelNote();
     classesData = data.classes || [];
     if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
     if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
     renderClasses(classesData);
-    if (data.hasCharacter) {
-      showGame();
-      if (data.character) updateStatus(data.character);
-      renderField(data.enemies, data.companions);
-      logInnerEl.innerHTML = '';
-      (data.log || []).forEach(renderLogEntry);
-      scrollLog();
-      setGameOver(!!data.dead);
-    } else {
-      resetWizard();
-      showSetup();
-    }
-    // API 키가 없으면 설정을 먼저 열어 안내
-    if (!mySettings.hasApiKey) openSettings(true);
+    applyGameState(data);
+    // 키가 하나도 없으면 설정을 먼저 열어 안내
+    if (!Object.keys(mySettings.keys).length) openSettings(true);
   });
 
-  socket.on('reset', () => {
-    prevHp = null;
-    logInnerEl.innerHTML = '';
-    renderField([], []);
+  // 활성 게임의 전체 상태를 화면에 반영(init/슬롯 전환/새 게임/삭제 공용).
+  socket.on('slotSwitched', (data) => {
     closeLevelUp();
     clearSuggestions();
-    setGameOver(false);
-    resetWizard();
-    showSetup();
+    closeSettings();
+    gameModelModal.classList.add('hidden');
+    applyGameState(data);
+  });
+  socket.on('slots', (data) => renderSlots(data));
+  socket.on('gameModelUpdated', (ai) => {
+    currentGameAi = ai || currentGameAi;
+    updateGameModelLabel();
+    updateModelNote();
   });
 
   socket.on('narration', (entry) => {
@@ -186,11 +194,89 @@ const KEY_URLS = {
   custom: { url: 'Ollama/LM Studio 등', note: '자체 호스팅은 키가 필요 없을 수 있음(비우면 됨)' },
 };
 
+/** 활성 게임의 제공자에 키가 등록돼 있는지. custom은 baseURL 기준. */
+function providerReady(prov) {
+  if (!mySettings) return false;
+  if (prov === 'custom') return !!(mySettings.baseURL && mySettings.baseURL.trim());
+  return !!(mySettings.keys && mySettings.keys[prov]);
+}
+
 function updateModelNote() {
-  if (!mySettings) return;
-  const model = mySettings.model || defaultModels[mySettings.provider] || '기본';
-  const pname = PROVIDER_LABELS[mySettings.provider] || mySettings.provider;
-  modelNote.textContent = `${pname} · ${model}${mySettings.hasApiKey ? '' : ' · ⚠ 키 미등록'}`;
+  const prov = currentGameAi.provider || 'gemini';
+  const model = currentGameAi.model || defaultModels[prov] || '기본';
+  const pname = PROVIDER_LABELS[prov] || prov;
+  modelNote.textContent = `${pname} · ${model}${providerReady(prov) ? '' : ' · ⚠ 키 미등록'}`;
+}
+
+/** 로그 헤더의 🧠 버튼 라벨 = 현재 게임의 제공자·모델. */
+function updateGameModelLabel() {
+  const prov = currentGameAi.provider || 'gemini';
+  const model = currentGameAi.model || defaultModels[prov] || '기본';
+  gameModelLabelEl.textContent = `${PROVIDER_LABELS[prov] || prov} · ${model}`;
+  gameModelBtn.classList.toggle('warn', !providerReady(prov));
+}
+
+/** init/slotSwitched 공용: 한 게임의 전체 상태를 렌더. */
+function applyGameState(data) {
+  prevHp = null;
+  currentGameAi = data.ai || currentGameAi;
+  updateGameModelLabel();
+  updateModelNote();
+  closeLevelUp();
+  clearSuggestions();
+  if (data.hasCharacter) {
+    showGame();
+    if (data.character) updateStatus(data.character);
+    renderField(data.enemies || [], data.companions || []);
+    logInnerEl.innerHTML = '';
+    (data.log || []).forEach(renderLogEntry);
+    scrollLog();
+    setGameOver(!!data.dead);
+    if (data.pendingLevelUp) openLevelUp(data.pendingLevelUp);
+  } else {
+    setGameOver(false);
+    resetWizard();
+    showSetup();
+  }
+}
+
+/** 슬롯 칩들을 렌더. */
+function renderSlots(data) {
+  if (!data || !slotBarEl) return;
+  slotBarEl.innerHTML = '';
+  (data.slots || []).forEach((s) => {
+    const chip = document.createElement('div');
+    chip.className = 'slot-chip' + (s.id === data.activeId ? ' active' : '');
+    const label = s.hasCharacter
+      ? `${s.name || '모험가'}${s.dead ? ' ☠️' : ''} · ${s.className || ''} Lv${s.level || 1}`
+      : '빈 슬롯 (새 모험)';
+    const btn = document.createElement('button');
+    btn.className = 'slot-main';
+    btn.textContent = label;
+    btn.title = '이 게임으로 전환';
+    btn.addEventListener('click', () => {
+      if (s.id !== data.activeId) socket.emit('switchSlot', { id: s.id });
+    });
+    chip.appendChild(btn);
+    // 삭제 버튼 (슬롯이 2개 이상일 때만 노출)
+    if ((data.slots || []).length > 1) {
+      const del = document.createElement('button');
+      del.className = 'slot-del';
+      del.textContent = '✕';
+      del.title = '이 게임 삭제';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nm = s.hasCharacter ? `"${s.name || '이 게임'}"` : '이 빈 슬롯';
+        if (confirm(`${nm}을(를) 삭제할까요? 되돌릴 수 없습니다.`)) socket.emit('deleteSlot', { id: s.id });
+      });
+      chip.appendChild(del);
+    }
+    slotBarEl.appendChild(chip);
+  });
+  // 새 게임 버튼 활성/비활성 (최대치)
+  const full = (data.slots || []).length >= (data.max || 3);
+  newGameBtn.disabled = full;
+  newGameBtn.title = full ? `게임은 최대 ${data.max || 3}개까지 저장됩니다` : '새 게임 슬롯 만들기';
 }
 
 // ---------- 화면 전환 ----------
@@ -535,10 +621,34 @@ suggestBtn.addEventListener('click', () => {
 });
 
 newGameBtn.addEventListener('click', () => {
-  if (confirm('현재 진행을 지우고 새 게임을 시작할까요?')) {
-    clearSuggestions();
-    socket.emit('resetGame');
-  }
+  if (newGameBtn.disabled) return;
+  clearSuggestions();
+  socket.emit('newGame'); // 기존 게임 유지 + 새 슬롯 생성
+});
+
+// --- 이 게임의 AI 모델 모달 ---
+function openGameModel() {
+  gameModelErrorEl.classList.add('hidden');
+  gmProviderEl.value = currentGameAi.provider || 'gemini';
+  gmModelEl.value = currentGameAi.model || '';
+  updateGameModelHint();
+  gameModelModal.classList.remove('hidden');
+}
+function updateGameModelHint() {
+  const prov = gmProviderEl.value;
+  gmModelEl.placeholder = defaultModels[prov] || '기본값';
+  const ready = providerReady(prov);
+  const pname = PROVIDER_LABELS[prov] || prov;
+  gmKeyHintEl.innerHTML = ready
+    ? `${pname} 키 등록됨 ✓`
+    : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
+}
+gameModelBtn.addEventListener('click', openGameModel);
+gmProviderEl.addEventListener('change', updateGameModelHint);
+gmCancelBtn.addEventListener('click', () => gameModelModal.classList.add('hidden'));
+gmSaveBtn.addEventListener('click', () => {
+  socket.emit('setGameModel', { provider: gmProviderEl.value, model: gmModelEl.value.trim() });
+  gameModelModal.classList.add('hidden');
 });
 
 let gameOver = false;
@@ -958,7 +1068,8 @@ function closeSettings() {
 function updateSettingsHints() {
   const prov = setProviderEl.value;
   setModelEl.placeholder = defaultModels[prov] || '기본값';
-  keyStatusEl.textContent = mySettings && mySettings.hasApiKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
+  const hasKey = !!(mySettings && mySettings.keys && mySettings.keys[prov]);
+  keyStatusEl.textContent = hasKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
   const k = KEY_URLS[prov] || KEY_URLS.gemini;
   keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
   // 커스텀 제공자일 때만 엔드포인트 주소 입력란 표시
@@ -977,8 +1088,10 @@ settingsSaveBtn.addEventListener('click', async () => {
     if (setKeyEl.value.trim()) body.apiKey = setKeyEl.value.trim();
     const data = await api('/api/settings', body);
     mySettings = data.user.settings;
+    if (!mySettings.keys) mySettings.keys = {};
     setKeyEl.value = '';
     updateModelNote();
+    updateGameModelLabel();
     closeSettings();
   } catch (e) {
     settingsErrorEl.textContent = e.message;
