@@ -171,8 +171,10 @@ io.on('connection', (socket) => {
     log: session.log,
     enemies: session.enemies,
     companions: session.companions,
+    dead: session.dead,
   });
   if (session.pendingLevelUp) socket.emit('levelUp', session.pendingLevelUp);
+  if (session.dead) socket.emit('gameOver', { reason: 'dead' });
 
   socket.on('createCharacter', async (payload) => {
     if (session.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });

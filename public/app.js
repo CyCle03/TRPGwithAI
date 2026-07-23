@@ -120,6 +120,7 @@ function wireSocket() {
       logInnerEl.innerHTML = '';
       (data.log || []).forEach(renderLogEntry);
       scrollLog();
+      setGameOver(!!data.dead);
     } else {
       resetWizard();
       showSetup();
@@ -134,6 +135,7 @@ function wireSocket() {
     renderField([], []);
     closeLevelUp();
     clearSuggestions();
+    setGameOver(false);
     resetWizard();
     showSetup();
   });
@@ -155,6 +157,7 @@ function wireSocket() {
   });
   socket.on('levelUp', (options) => openLevelUp(options));
   socket.on('levelUpDone', () => closeLevelUp());
+  socket.on('gameOver', () => setGameOver(true));
   socket.on('suggestions', ({ items }) => renderSuggestions(items || []));
   socket.on('error', ({ message }) => {
     renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
@@ -170,6 +173,7 @@ const PROVIDER_LABELS = {
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   xai: 'Grok',
+  qwen: 'Qwen',
   custom: '커스텀',
 };
 const KEY_URLS = {
@@ -178,6 +182,7 @@ const KEY_URLS = {
   openai: { url: 'platform.openai.com/api-keys', note: '유료' },
   deepseek: { url: 'platform.deepseek.com/api_keys', note: '유료(저렴)' },
   xai: { url: 'console.x.ai', note: '유료' },
+  qwen: { url: 'bailian.console.alibabacloud.com', note: '유료(신규 무료 크레딧 제공)' },
   custom: { url: 'Ollama/LM Studio 등', note: '자체 호스팅은 키가 필요 없을 수 있음(비우면 됨)' },
 };
 
@@ -519,11 +524,28 @@ newGameBtn.addEventListener('click', () => {
   }
 });
 
+let gameOver = false;
 function setBusy(busy) {
+  if (gameOver) return; // 사망 상태에서는 입력 비활성 유지
   sendBtn.disabled = busy;
   suggestBtn.disabled = busy;
   actionInput.disabled = busy;
   if (!busy) actionInput.focus();
+}
+
+/** 캐릭터 사망(죽음의 문턱 6-) 시 입력을 잠그고 새 게임을 유도. */
+function setGameOver(on) {
+  gameOver = on;
+  sendBtn.disabled = on;
+  suggestBtn.disabled = on;
+  actionInput.disabled = on;
+  if (on) {
+    actionInput.placeholder = '캐릭터가 사망했습니다 — 새 게임으로 새 모험을 시작하세요.';
+    newGameBtn.classList.add('pulse');
+  } else {
+    actionInput.placeholder = '행동을 서술하세요. 예: 고블린 뒤로 몰래 다가간다';
+    newGameBtn.classList.remove('pulse');
+  }
 }
 
 function fmtMod(v) {

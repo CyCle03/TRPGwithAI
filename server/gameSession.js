@@ -32,8 +32,10 @@ class GameSession {
     this.pendingLevelUp = data?.pendingLevelUp || null; // 레벨업 선택 대기 옵션
     this.enemies = data?.enemies || []; // 현재 장면의 적 NPC
     this.companions = data?.companions || []; // 현재 장면의 동료 NPC
+    this.dead = data?.dead || false; // 죽음의 문턱(Last Breath) 6- → 캐릭터 사망
     this.aiConfig = null; // 런타임 전용: {provider, model, apiKey} — 저장 안 함(보안)
     this.busy = false;
+    this._resolvingDeath = false; // 죽음의 문턱 처리 중 재진입 방지(저장 안 함)
     // 보너스 XP 남발 방지용 (저장 안 함)
     this._turnCount = 0;
     this._lastBonusTurn = -99;
@@ -60,6 +62,7 @@ class GameSession {
       pendingLevelUp: this.pendingLevelUp,
       enemies: this.enemies,
       companions: this.companions,
+      dead: this.dead,
     };
   }
 
@@ -89,6 +92,7 @@ class GameSession {
     this.pendingLevelUp = null;
     this.enemies = [];
     this.companions = [];
+    this.dead = false;
 
     emit('stateUpdate', this.character);
     emit('fieldUpdate', { enemies: this.enemies, companions: this.companions });
@@ -113,6 +117,11 @@ class GameSession {
   async playerAction(emit, text) {
     if (!this.character) {
       emit('error', { message: '먼저 캐릭터를 생성하세요.' });
+      return;
+    }
+    if (this.dead) {
+      emit('gameOver', { reason: 'dead' });
+      emit('error', { message: `${this.character.name}은(는) 이미 세상을 떠났습니다. '새 게임'으로 새 캐릭터를 만드세요.` });
       return;
     }
     if (this.pendingLevelUp) {
@@ -227,7 +236,7 @@ class GameSession {
     }
 
     if (action.type === 'update_state') {
-      this._applyAndEmit(emit, action);
+      await this._applyAndEmit(emit, action);
       return;
     }
 
@@ -289,17 +298,60 @@ class GameSession {
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
   }
 
-  /** 상태 변경을 검증·반영하고 상태창 갱신 + 로그. */
-  _applyAndEmit(emit, action) {
+  /** 상태 변경을 검증·반영하고 상태창 갱신 + 로그. HP 0이면 죽음의 문턱 판정. */
+  async _applyAndEmit(emit, action) {
     const applied = rules.applyStateUpdate(this.character, action);
     const changeText = rules.formatStateChange(applied);
     emit('stateUpdate', this.character);
     if (changeText) {
       this._pushLog(emit, 'state', changeText, 'systemLog');
     }
-    if (this.character.hp <= 0) {
-      this._pushLog(emit, 'system', '⚠️ HP가 0이 되었습니다. 위태로운 상황입니다...');
+    // HP가 0 이하로 떨어지면 던전 월드 "죽음의 문턱(Last Breath)" 판정.
+    if (this.character.hp <= 0 && !this.dead && !this._resolvingDeath) {
+      await this._lastBreath(emit);
     }
+  }
+
+  /**
+   * 죽음의 문턱(Last Breath): HP가 0이 되면 능력치 없이 2d6을 굴린다.
+   * 10+ 죽음을 속인다(HP 1) · 7-9 죽음과 거래(HP 1, 대가) · 6- 사망.
+   */
+  async _lastBreath(emit) {
+    this._resolvingDeath = true;
+    const dice = rules.rollDice(2, 6);
+    const total = dice[0] + dice[1];
+    const tier = rules.classifyTotal(total);
+    this._pushLog(
+      emit,
+      'dice',
+      `죽음의 문턱 — 🎲 2d6 = [${dice.join(',')}] = ${total} → ${rules.TIER_LABEL[tier]}`,
+      'dice',
+      { tier, dice }
+    );
+
+    let sysMsg;
+    if (tier === 'strong') {
+      this.character.hp = 1;
+      emit('stateUpdate', this.character);
+      this._pushLog(emit, 'state', '💀 죽음의 문턱: 죽음을 속이고 돌아왔다 (HP 1)');
+      sysMsg =
+        '[시스템] 캐릭터가 죽음의 문턱(Last Breath)에서 10+로 죽음을 속였다. 가까스로 의식을 붙잡고 살아나는 긴박한 장면을 짧게 서사화하라. HP는 1로 회복됐다. 추가 판정·피해 요청 없이 action.type="none"으로만.';
+    } else if (tier === 'weak') {
+      this.character.hp = 1;
+      emit('stateUpdate', this.character);
+      this._pushLog(emit, 'state', '💀 죽음의 문턱: 죽음과 거래했다 — 대가가 따른다 (HP 1)');
+      sysMsg =
+        '[시스템] 캐릭터가 죽음의 문턱에서 7-9가 나왔다. 죽음(Death)이 거래를 제안한다: 목숨을 돌려주는 대신 반드시 갚아야 할 끔찍한 대가·빚·사명을 하나 구체적으로 제시하고 그 장면을 서사화하라. HP는 1로 돌아왔다. action.type="none".';
+    } else {
+      this.dead = true;
+      this._pushLog(emit, 'state', '☠️ 죽음의 문턱: 6- — 죽음이 데려갔다.');
+      emit('gameOver', { reason: 'lastBreath' });
+      sysMsg =
+        '[시스템] 캐릭터가 죽음의 문턱에서 6-가 나와 사망했다. 이 캐릭터의 마지막을 존엄하고 인상적으로 마무리하는 짧은 결말 서사를 써라. 이후 모험은 여기서 끝난다. action.type="none".';
+    }
+    this.messages.push({ role: 'user', content: sysMsg });
+    await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });
+    this._resolvingDeath = false;
   }
 }
 

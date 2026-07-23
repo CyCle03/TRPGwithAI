@@ -176,7 +176,7 @@ function getAiConfig(id) {
   };
 }
 
-const VALID_PROVIDERS = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'custom'];
+const VALID_PROVIDERS = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'];
 
 function updateSettings(id, { provider, model, apiKey, baseURL }) {
   const db = loadUsers();
