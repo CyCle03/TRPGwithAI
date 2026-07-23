@@ -8,7 +8,8 @@
   </head>
   <body>
     <!-- 랜딩 배경 영상 (로그인/캐릭터 생성 화면 뒤, 게임 중엔 숨김) -->
-    <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto">
+    <!-- 앞으로 진행하는 인트로라 루프 대신 1회 재생 후 마지막 프레임 정지 -->
+    <video id="bgVideo" class="bg-video" autoplay muted playsinline preload="auto">
       <source src="assets/intro.mp4" type="video/mp4" />
     </video>
     <div id="bgOverlay" class="bg-overlay"></div>
