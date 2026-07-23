@@ -94,6 +94,92 @@ async function chat(
   return content;
 }
 
+/**
+ * 스트리밍 채팅(SSE). 생성되는 대로 onChunk(조각)을 부르고, 마지막에 전체 텍스트를 반환한다.
+ * CPU 로컬 모델처럼 느린 경우 체감 대기시간을 크게 줄인다.
+ */
+async function chatStream(
+  baseURL,
+  apiKey,
+  model,
+  defaultModel,
+  systemText,
+  messages,
+  maxTokens,
+  timeoutMs,
+  noThink,
+  onChunk
+) {
+  const ctl = new AbortController();
+  const timer = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+  let res;
+  try {
+    const body = {
+      model: model || defaultModel,
+      messages: toOpenAIMessages(systemText, messages),
+      stream: true,
+    };
+    if (maxTokens) body.max_tokens = maxTokens;
+    if (noThink) {
+      body.think = false;
+      body.reasoning_effort = 'none';
+    }
+    res = await fetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } catch (e) {
+    if (timer) clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('응답 시간이 너무 오래 걸려 중단했습니다.');
+    throw new Error('네트워크 오류: ' + e.message);
+  }
+  if (!res.ok) {
+    if (timer) clearTimeout(timer);
+    const t = await res.text().catch(() => '');
+    throw new Error(`API 오류 ${res.status}: ${t.slice(0, 160)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let full = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || ''; // 마지막 조각은 다음 청크와 이어붙인다
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const payload = t.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const j = JSON.parse(payload);
+          const delta = j.choices && j.choices[0] && j.choices[0].delta;
+          const piece = delta && delta.content;
+          if (piece) {
+            full += piece;
+            if (onChunk) onChunk(piece);
+          }
+        } catch (_) {
+          /* 불완전한 JSON 조각은 무시 */
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('응답 시간이 너무 오래 걸려 중단했습니다.');
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  if (!full.trim()) throw new Error('응답이 비어 있습니다.');
+  return full;
+}
+
 /** baseURL 정규화: 뒤 슬래시 제거. */
 function normBase(url) {
   return String(url || '').trim().replace(/\/+$/, '');
@@ -157,6 +243,21 @@ function makeProvider({
         maxTokens,
         timeoutMs,
         autoNoThink
+      );
+    },
+    /** 스트리밍 캐릭터 챗 — 생성되는 대로 onChunk로 흘려보낸다. */
+    async generateChatStream({ apiKey, model, baseURL: cbu, system, messages, maxTokens, onChunk }) {
+      return chatStream(
+        resolveBase(cbu),
+        resolveKey(apiKey),
+        model,
+        defaultModel,
+        withNoThink(system, model),
+        messages,
+        maxTokens,
+        timeoutMs,
+        autoNoThink,
+        onChunk
       );
     },
     /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */

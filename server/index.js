@@ -923,12 +923,18 @@ io.on('connection', (socket) => {
       // 무료 체험은 CPU 추론이라 입력 토큰(프롬프트 읽기)이 병목 → 지시문 압축
       const system = chat.buildSystemPrompt(c.def, len, { compact: provider === 'free' });
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
-      const reply = await aiGM.chatReply(
-        { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL },
-        system,
-        recent,
-        chat.maxTokensFor(len)
-      );
+      const aiCfg = { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL };
+      const maxTok = chat.maxTokensFor(len);
+      let reply;
+      if (aiGM.canStream(provider)) {
+        // 생성되는 대로 흘려보내 체감 대기시간을 줄인다(느린 로컬 모델에 특히 효과적).
+        emit('chatStreamStart', {});
+        reply = await aiGM.chatReplyStream(aiCfg, system, recent, maxTok, (piece) =>
+          emit('chatChunk', { text: piece })
+        );
+      } else {
+        reply = await aiGM.chatReply(aiCfg, system, recent, maxTok);
+      }
       // [img:태그] 마커를 뽑아 이미지로 치환(본문에서는 제거)
       const { text: clean, imageId } = chat.extractImage(reply, c.def.images);
       const msg = { role: 'assistant', content: clean };

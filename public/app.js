@@ -211,6 +211,8 @@ let currentChatAi = { provider: 'gemini', model: '' };
 let modelModalContext = 'gm'; // 모델 모달이 게임용인지 챗용인지
 let chatBusy = false;
 let chatInited = false; // 챗 데이터 최초 로드 여부
+let streamBubble = null; // 스트리밍 중인 말풍선 요소
+let streamText = ''; // 스트리밍 누적 텍스트
 
 // 위저드 상태
 let classesData = [];
@@ -289,8 +291,30 @@ function wireSocket() {
   // ===== 캐릭터 챗 =====
   socket.on('chats', (data) => renderChatBar(data));
   socket.on('chatState', (data) => applyChatState(data));
+  // 스트리밍: 빈 말풍선을 만들고 조각이 올 때마다 이어 붙인다.
+  socket.on('chatStreamStart', () => {
+    streamBubble = appendChatMsg('assistant', '');
+    streamText = '';
+    scrollChat();
+  });
+  socket.on('chatChunk', ({ text }) => {
+    if (!streamBubble) {
+      streamBubble = appendChatMsg('assistant', '');
+      streamText = '';
+    }
+    streamText += text;
+    setBubbleText(streamBubble, streamText);
+    scrollChat();
+  });
   socket.on('chatMessage', (m) => {
-    appendChatMsg(m.role, m.content, m.imageId);
+    if (streamBubble) {
+      // 최종본으로 교체(마커 제거·이미지 부착)
+      finalizeBubble(streamBubble, m.content, m.imageId);
+      streamBubble = null;
+      streamText = '';
+    } else {
+      appendChatMsg(m.role, m.content, m.imageId);
+    }
     scrollChat();
   });
   socket.on('chatThinking', ({ on }) => {
@@ -357,6 +381,11 @@ function wireSocket() {
     stopThinking();
     thinkingEl.classList.add('hidden');
     chatThinkingEl.classList.add('hidden');
+    if (streamBubble) {
+      streamBubble.remove(); // 실패한 부분 응답 제거
+      streamBubble = null;
+      streamText = '';
+    }
     renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
     scrollLog();
     setBusy(false);
@@ -493,7 +522,7 @@ function scrollChat() {
   chatLogEl.scrollTop = chatLogEl.scrollHeight;
 }
 
-/** 챗 메시지 버블 추가. role: 'user' | 'assistant'. imageId가 있으면 이미지도 표시. */
+/** 챗 메시지 버블 추가. role: 'user' | 'assistant'. @returns 생성된 요소 */
 function appendChatMsg(role, content, imageId) {
   const div = document.createElement('div');
   div.className = 'entry ' + (role === 'user' ? 'player' : 'gm');
@@ -506,9 +535,30 @@ function appendChatMsg(role, content, imageId) {
     div.appendChild(img);
   }
   const p = document.createElement('div');
+  p.className = 'msg-text';
   p.textContent = content;
   div.appendChild(p);
   chatLogInnerEl.appendChild(div);
+  return div;
+}
+
+/** 스트리밍 중 본문만 갱신. */
+function setBubbleText(bubble, text) {
+  const p = bubble.querySelector('.msg-text');
+  if (p) p.textContent = text;
+}
+
+/** 스트리밍 종료 — 정리된 본문으로 교체하고 필요하면 이미지를 붙인다. */
+function finalizeBubble(bubble, content, imageId) {
+  setBubbleText(bubble, content);
+  if (imageId && !bubble.querySelector('.chat-img')) {
+    const img = document.createElement('img');
+    img.className = 'chat-img';
+    img.src = `/img/${imageId}`;
+    img.alt = '장면 이미지';
+    img.loading = 'lazy';
+    bubble.insertBefore(img, bubble.firstChild);
+  }
 }
 
 /** 응답 실패 시 방금 보낸 사용자 버블 제거(재전송 가능). */

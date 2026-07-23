@@ -289,6 +289,31 @@ async function chatReply(cfg, system, messages, maxTokens) {
   });
 }
 
+/** 이 제공자가 스트리밍을 지원하는가. */
+function canStream(providerName) {
+  return typeof pickProvider(providerName).generateChatStream === 'function';
+}
+
+/**
+ * 스트리밍 캐릭터 챗. onChunk(조각)을 부르며 진행하고 전체 텍스트를 반환한다.
+ * 미지원 제공자는 일반 호출로 대체한다.
+ */
+async function chatReplyStream(cfg, system, messages, maxTokens, onChunk) {
+  const p = pickProvider(cfg.provider);
+  const args = {
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    baseURL: cfg.baseURL,
+    system,
+    messages,
+    maxTokens,
+  };
+  if (typeof p.generateChatStream === 'function') {
+    return p.generateChatStream({ ...args, onChunk });
+  }
+  return p.generateChat(args);
+}
+
 /**
  * 제공자에서 실제 사용 가능한 모델 목록을 조회한다.
  * 클라우드 제공자는 키가 필수(목록 조회 자체가 인증 필요). 커스텀/로컬은 키 없이도 가능.
@@ -317,6 +342,8 @@ module.exports = {
   callGM,
   suggestGmActions,
   chatReply,
+  chatReplyStream,
+  canStream,
   listModels,
   testModel,
   defaultModel,
