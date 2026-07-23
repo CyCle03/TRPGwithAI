@@ -265,7 +265,13 @@
           <option value="custom">커스텀 (Ollama / OpenAI 호환)</option>
         </select>
         <label>모델 <span class="opt">(비우면 기본값 사용)</span></label>
-        <input id="gmModel" type="text" placeholder="기본값" autocomplete="off" />
+        <input id="gmModel" type="text" placeholder="기본값" autocomplete="off" list="gmModelList" />
+        <datalist id="gmModelList"></datalist>
+        <div class="model-actions">
+          <button type="button" id="gmFetchModels" class="ghost">📋 사용 가능한 모델 불러오기</button>
+          <button type="button" id="gmTestModel" class="ghost">🔌 연결 테스트</button>
+        </div>
+        <p class="hint" id="gmModelsHint"></p>
         <p class="hint" id="gmKeyHint"></p>
         <div id="gameModelError" class="auth-error hidden"></div>
         <div class="wizard-nav">

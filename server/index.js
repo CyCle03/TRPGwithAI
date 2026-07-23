@@ -123,6 +123,45 @@ app.post('/api/settings', (req, res) => {
   }
 });
 
+// 실제 사용 가능한 모델 목록 (등록된 키로 조회, 과금 없음)
+app.post('/api/models', async (req, res) => {
+  const uid = userIdFromReq(req);
+  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  const { provider } = req.body || {};
+  if (!aiGM.PROVIDER_NAMES.includes(provider)) {
+    return res.status(400).json({ error: '알 수 없는 제공자입니다.' });
+  }
+  try {
+    const cfg = auth.getAiConfig(uid, provider);
+    const models = await aiGM.listModels(provider, cfg);
+    res.json({ models });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 연결 테스트: 아주 짧은 요청 1회로 실제 호출 가능 여부(크레딧·한도 포함) 확인
+app.post('/api/model-test', async (req, res) => {
+  const uid = userIdFromReq(req);
+  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  const { provider, model } = req.body || {};
+  if (!aiGM.PROVIDER_NAMES.includes(provider)) {
+    return res.status(400).json({ error: '알 수 없는 제공자입니다.' });
+  }
+  try {
+    const cfg = auth.getAiConfig(uid, provider);
+    const sample = await aiGM.testModel({
+      provider,
+      model: typeof model === 'string' ? model.trim() : '',
+      apiKey: cfg.apiKey,
+      baseURL: cfg.baseURL,
+    });
+    res.json({ ok: true, sample });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });

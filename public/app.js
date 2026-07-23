@@ -91,6 +91,10 @@ const gmKeyHintEl = document.getElementById('gmKeyHint');
 const gmCancelBtn = document.getElementById('gmCancel');
 const gmSaveBtn = document.getElementById('gmSave');
 const gameModelErrorEl = document.getElementById('gameModelError');
+const gmModelListEl = document.getElementById('gmModelList');
+const gmFetchModelsBtn = document.getElementById('gmFetchModels');
+const gmTestModelBtn = document.getElementById('gmTestModel');
+const gmModelsHintEl = document.getElementById('gmModelsHint');
 
 // 모드 토글 + 캐릭터 챗
 const modeGameBtn = document.getElementById('modeGameBtn');
@@ -897,14 +901,60 @@ function openModelModal(context) {
 function updateGameModelHint() {
   const prov = gmProviderEl.value;
   gmModelEl.placeholder = defaultModels[prov] || '기본값';
+  // 제공자가 바뀌면 이전 제공자의 모델 목록은 무효
+  gmModelListEl.innerHTML = '';
+  gmModelsHintEl.textContent = providerReady(prov)
+    ? '「사용 가능한 모델 불러오기」로 실제 목록을 확인할 수 있어요.'
+    : '키를 등록하면 실제 사용 가능한 모델을 불러올 수 있어요.';
   const ready = providerReady(prov);
   const pname = PROVIDER_LABELS[prov] || prov;
   gmKeyHintEl.innerHTML = ready
     ? `${pname} 키 등록됨 ✓`
     : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
 }
+/** 등록된 키로 실제 사용 가능한 모델 목록을 불러와 자동완성에 채운다. */
+async function fetchModelList() {
+  const prov = gmProviderEl.value;
+  gmFetchModelsBtn.disabled = true;
+  gmModelsHintEl.textContent = '불러오는 중…';
+  try {
+    const data = await api('/api/models', { provider: prov });
+    const models = data.models || [];
+    gmModelListEl.innerHTML = '';
+    models.forEach((m) => {
+      const o = document.createElement('option');
+      o.value = m;
+      gmModelListEl.appendChild(o);
+    });
+    gmModelsHintEl.textContent = models.length
+      ? `사용 가능한 모델 ${models.length}개 — 모델 칸을 클릭하면 목록이 뜹니다.`
+      : '사용 가능한 모델이 없습니다.';
+  } catch (e) {
+    gmModelsHintEl.textContent = '⚠ ' + e.message;
+  } finally {
+    gmFetchModelsBtn.disabled = false;
+  }
+}
+
+/** 실제 호출이 되는지(크레딧·한도 포함) 짧은 요청으로 테스트. */
+async function testModelConnection() {
+  const prov = gmProviderEl.value;
+  gmTestModelBtn.disabled = true;
+  gmModelsHintEl.textContent = '연결 테스트 중…';
+  try {
+    const data = await api('/api/model-test', { provider: prov, model: gmModelEl.value.trim() });
+    gmModelsHintEl.textContent = `✅ 연결 성공 (응답: ${data.sample || 'OK'})`;
+  } catch (e) {
+    gmModelsHintEl.textContent = '❌ ' + e.message;
+  } finally {
+    gmTestModelBtn.disabled = false;
+  }
+}
+
 gameModelBtn.addEventListener('click', () => openModelModal('gm'));
 chatModelBtn.addEventListener('click', () => openModelModal('chat'));
+gmFetchModelsBtn.addEventListener('click', fetchModelList);
+gmTestModelBtn.addEventListener('click', testModelConnection);
 gmProviderEl.addEventListener('change', updateGameModelHint);
 gmCancelBtn.addEventListener('click', () => gameModelModal.classList.add('hidden'));
 gmSaveBtn.addEventListener('click', () => {

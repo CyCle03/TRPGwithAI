@@ -84,6 +84,20 @@ async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }
   return textBlock.text;
 }
 
+/** 사용 가능한 모델 목록 (키 필요, 과금 없음). */
+async function listModels({ apiKey }) {
+  if (!apiKey) throw new Error('Claude API 키가 필요합니다. 키가 있어야 목록을 조회할 수 있어요.');
+  const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`모델 목록 조회 실패 ${res.status}: ${t.slice(0, 140)}`);
+  }
+  const data = await res.json();
+  return (data.data || []).map((m) => m.id).filter(Boolean);
+}
+
 // 캐릭터 챗: 구조화 없이 일반 텍스트 응답
 async function generateChat({ apiKey, model, system, messages }) {
   const resp = await getClient(apiKey).messages.create({
@@ -127,4 +141,4 @@ async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem,
   return JSON.stringify(obj.suggestions || []);
 }
 
-module.exports = { generate, generateSuggestions, generateChat, DEFAULT_MODEL, name: 'anthropic' };
+module.exports = { generate, generateSuggestions, generateChat, listModels, DEFAULT_MODEL, name: 'anthropic' };

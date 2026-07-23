@@ -1152,6 +1152,16 @@ button.ghost.pulse {
   margin: 0 0 16px;
   font-size: 0.9rem;
 }
+.model-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -4px 0 8px;
+}
+.model-actions button {
+  flex: 1 1 auto;
+  font-size: 0.78rem;
+}
 .modal-card h3 {
   margin: 18px 0 8px;
   font-size: 0.85rem;

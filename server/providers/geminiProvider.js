@@ -101,6 +101,22 @@ async function generate({ apiKey, model, staticSystem, dynamicSystem, messages }
   return text;
 }
 
+/** 사용 가능한 모델 목록 (키 필요, 과금 없음). generateContent 지원 모델만. */
+async function listModels({ apiKey }) {
+  if (!apiKey) throw new Error('Gemini API 키가 필요합니다. 키가 있어야 목록을 조회할 수 있어요.');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`모델 목록 조회 실패 ${res.status}: ${t.slice(0, 140)}`);
+  }
+  const data = await res.json();
+  return (data.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter(Boolean);
+}
+
 // 캐릭터 챗: 구조화 없이 일반 텍스트 응답
 async function generateChat({ apiKey, model, system, messages }) {
   const resp = await getClient(apiKey).models.generateContent({
@@ -131,4 +147,4 @@ async function generateSuggestions({ apiKey, model, staticSystem, dynamicSystem,
   return text;
 }
 
-module.exports = { generate, generateSuggestions, generateChat, DEFAULT_MODEL, name: 'gemini' };
+module.exports = { generate, generateSuggestions, generateChat, listModels, DEFAULT_MODEL, name: 'gemini' };

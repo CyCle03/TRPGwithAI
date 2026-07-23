@@ -246,4 +246,28 @@ async function chatReply(cfg, system, messages) {
   });
 }
 
-module.exports = { callGM, suggestGmActions, chatReply, defaultModel, PROVIDER_NAMES };
+/**
+ * 제공자에서 실제 사용 가능한 모델 목록을 조회한다.
+ * 클라우드 제공자는 키가 필수(목록 조회 자체가 인증 필요). 커스텀/로컬은 키 없이도 가능.
+ * @returns {Promise<string[]>}
+ */
+async function listModels(providerName, cfg) {
+  const p = pickProvider(providerName);
+  if (typeof p.listModels !== 'function') throw new Error('이 제공자는 목록 조회를 지원하지 않습니다.');
+  const models = await p.listModels({ apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+  return Array.from(new Set(models)).sort();
+}
+
+/** 실제 호출이 되는지(키·크레딧·한도 포함) 아주 짧은 요청으로 확인. */
+async function testModel(cfg) {
+  const text = await pickProvider(cfg.provider).generateChat({
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    baseURL: cfg.baseURL,
+    system: '너는 연결 테스트용이다. 반드시 "OK" 한 단어만 답하라.',
+    messages: [{ role: 'user', content: 'ping' }],
+  });
+  return String(text || '').trim().slice(0, 40);
+}
+
+module.exports = { callGM, suggestGmActions, chatReply, listModels, testModel, defaultModel, PROVIDER_NAMES };

@@ -104,6 +104,19 @@ function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
     async generateChat({ apiKey, model, baseURL: cbu, system, messages }) {
       return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false);
     },
+    /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */
+    async listModels({ apiKey, baseURL: cbu }) {
+      const base = resolveBase(cbu);
+      const res = await fetch(`${base}/models`, {
+        headers: { Authorization: `Bearer ${resolveKey(apiKey)}` },
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        throw new Error(`모델 목록 조회 실패 ${res.status}: ${t.slice(0, 140)}`);
+      }
+      const data = await res.json();
+      return (data.data || data.models || []).map((m) => m.id || m.name).filter(Boolean);
+    },
   };
 }
 
