@@ -194,21 +194,32 @@ function updateModelNote() {
 }
 
 // ---------- 화면 전환 ----------
+const bgVideo = document.getElementById('bgVideo');
+/** 랜딩(로그인·생성) 화면에서만 배경 영상 재생, 게임 중엔 정지. */
+function setLandingBg(on) {
+  document.body.classList.toggle('in-game', !on);
+  if (!bgVideo) return;
+  if (on) bgVideo.play().catch(() => {});
+  else bgVideo.pause();
+}
 function showAuth() {
   authEl.classList.remove('hidden');
   setupEl.classList.add('hidden');
   gameEl.classList.add('hidden');
   userBarEl.classList.add('hidden');
+  setLandingBg(true);
 }
 function showSetup() {
   authEl.classList.add('hidden');
   setupEl.classList.remove('hidden');
   gameEl.classList.add('hidden');
+  setLandingBg(true);
 }
 function showGame() {
   authEl.classList.add('hidden');
   setupEl.classList.add('hidden');
   gameEl.classList.remove('hidden');
+  setLandingBg(false);
 }
 
 // ---------- 캐릭터 생성 (위저드) ----------

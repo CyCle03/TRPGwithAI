@@ -37,6 +37,7 @@ app.use((req, res, next) => {
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
+      "media-src 'self'", // 랜딩 배경 영상(assets/intro.mp4)
       "connect-src 'self'", // 같은 출처 WebSocket(Socket.io) 포함
       "base-uri 'self'",
       "form-action 'self'",

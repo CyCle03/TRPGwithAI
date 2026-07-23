@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- 랜딩 배경 영상 (로그인/캐릭터 생성 화면 뒤, 게임 중엔 숨김) -->
+    <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto">
+      <source src="assets/intro.mp4" type="video/mp4" />
+    </video>
+    <div id="bgOverlay" class="bg-overlay"></div>
+
     <!-- 우측 상단 사용자 바 (로그인 후) -->
     <div id="userBar" class="user-bar hidden">
       <span id="userName"></span>
