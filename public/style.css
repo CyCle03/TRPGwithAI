@@ -1112,10 +1112,16 @@ button.ghost.pulse {
 }
 
 .thinking {
-  padding: 4px 18px 8px;
+  padding: 6px 18px 10px;
   color: var(--accent);
   font-size: 0.85rem;
   font-style: italic;
+  font-variant-numeric: tabular-nums; /* 초 숫자가 흔들리지 않게 */
+  animation: thinkPulse 1.6s ease-in-out infinite;
+}
+@keyframes thinkPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 .suggestions {

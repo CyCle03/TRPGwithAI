@@ -295,6 +295,8 @@ function wireSocket() {
   });
   socket.on('chatThinking', ({ on }) => {
     chatThinkingEl.classList.toggle('hidden', !on);
+    if (on) startThinking(chatThinkingEl, '상대가 입력 중', currentChatAi.provider);
+    else stopThinking();
     setChatBusy(on);
   });
   socket.on('chatModelUpdated', (ai) => {
@@ -343,6 +345,8 @@ function wireSocket() {
   );
   socket.on('gmThinking', ({ on }) => {
     thinkingEl.classList.toggle('hidden', !on);
+    if (on) startThinking(thinkingEl, 'GM이 이야기를 짜는 중', currentGameAi.provider);
+    else stopThinking();
     setBusy(on);
   });
   socket.on('levelUp', (options) => openLevelUp(options));
@@ -350,6 +354,9 @@ function wireSocket() {
   socket.on('gameOver', () => setGameOver(true));
   socket.on('suggestions', ({ items }) => renderSuggestions(items || []));
   socket.on('error', ({ message }) => {
+    stopThinking();
+    thinkingEl.classList.add('hidden');
+    chatThinkingEl.classList.add('hidden');
     renderLogEntry({ kind: 'system', text: '⚠️ ' + message });
     scrollLog();
     setBusy(false);
@@ -692,6 +699,36 @@ function renderGalleryList(el, items, mine) {
     }
     el.appendChild(card);
   });
+}
+
+// ---------- "응답 생성 중" 표시 (경과 시간 + 애니메이션) ----------
+// 로컬 모델은 수십 초가 걸려서, 살아있다는 신호가 없으면 멈춘 것처럼 보인다.
+let thinkTimer = null;
+function startThinking(el, baseText, provider) {
+  stopThinking();
+  if (!el) return;
+  const t0 = Date.now();
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  const render = () => {
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    i = (i + 1) % frames.length;
+    let txt = `${frames[i]} ${baseText}… ${sec}초`;
+    if (provider === 'free') {
+      if (sec >= 8) txt += ' · 무료 체험(서버 로컬 AI)은 응답이 느립니다. 정상 동작 중이에요.';
+    } else if (sec >= 25) {
+      txt += ' · 평소보다 오래 걸리고 있어요.';
+    }
+    el.textContent = txt;
+  };
+  render();
+  thinkTimer = setInterval(render, 120);
+}
+function stopThinking() {
+  if (thinkTimer) {
+    clearInterval(thinkTimer);
+    thinkTimer = null;
+  }
 }
 
 /** 갤러리 태그 필터 칩 렌더. */
