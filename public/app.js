@@ -204,7 +204,7 @@ let defaultModels = { gemini: '', anthropic: '' };
 let knownModels = {}; // 제공자별 추천 모델 후보(키 없이도 표시)
 let currentGameAi = { provider: 'gemini', model: '' }; // 활성 게임의 모델
 let providersList = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'];
-let currentMode = 'gm'; // 'gm' | 'chat'
+let currentMode = null; // null(홈) | 'gm' | 'chat' — 접속 시 항상 홈에서 시작
 let gmHasCharacter = false; // 게임 모드 화면 결정용
 let currentChat = null; // 활성 챗 상태 {chatId, persona, configured, messages, ai}
 let currentChatAi = { provider: 'gemini', model: '' };
@@ -260,7 +260,8 @@ function wireSocket() {
     if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
     if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
     renderClasses(classesData);
-    applyGameState(data);
+    applyGameState(data); // 상태만 반영(화면 전환은 안 함 — currentMode가 null이라)
+    showHome(); // 접속/새로고침 시 항상 홈부터
     // 공유 링크(?play=<id>)로 들어온 경우 해당 정의를 바로 가져와 플레이
     const playId = new URLSearchParams(location.search).get('play');
     if (playId) {
@@ -1096,10 +1097,20 @@ function setLandingBg(on) {
   if (on) bgVideo.play().catch(() => {});
   else bgVideo.pause();
 }
+const homeEl = document.getElementById('home');
 function hideAllScreens() {
-  [authEl, setupEl, gameEl, chatSetupEl, chatEl, galleryEl].forEach(
+  [authEl, setupEl, gameEl, chatSetupEl, chatEl, galleryEl, homeEl, profileEl].forEach(
     (e) => e && e.classList.add('hidden')
   );
+}
+/** 홈(모드 선택) — 로그인 후 항상 여기서 시작한다. */
+function showHome() {
+  currentMode = null;
+  modeGameBtn.classList.remove('active');
+  modeChatBtn.classList.remove('active');
+  hideAllScreens();
+  homeEl.classList.remove('hidden');
+  setLandingBg(true);
 }
 function showGallery() {
   hideAllScreens();
@@ -1569,6 +1580,9 @@ gmSaveBtn.addEventListener('click', () => {
 // --- 모드 토글 + 챗 버튼/폼 ---
 modeGameBtn.addEventListener('click', () => setMode('gm'));
 modeChatBtn.addEventListener('click', () => setMode('chat'));
+document.getElementById('homeBtn').addEventListener('click', showHome);
+document.getElementById('homeGameBtn').addEventListener('click', () => setMode('gm'));
+document.getElementById('homeChatBtn').addEventListener('click', () => setMode('chat'));
 newChatBtn.addEventListener('click', () => {
   if (newChatBtn.disabled) return;
   socket.emit('newChat');

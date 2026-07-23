@@ -14,8 +14,9 @@
 
     <!-- 우측 상단 사용자 바 (로그인 후) -->
     <div id="userBar" class="user-bar hidden">
+      <button id="homeBtn" class="ghost" title="홈으로">🏠</button>
       <div class="mode-toggle">
-        <button id="modeGameBtn" class="mode-btn active" title="AI GM 던전월드">🎲 게임</button>
+        <button id="modeGameBtn" class="mode-btn" title="AI GM 던전월드">🎲 게임</button>
         <button id="modeChatBtn" class="mode-btn" title="캐릭터 챗">💬 챗</button>
       </div>
       <button id="profileBtn" class="ghost" title="내 프로필"><span id="userName"></span></button>
@@ -38,6 +39,26 @@
           <span id="authToggleText">계정이 없나요?</span>
           <a id="authSwitch" href="#">회원가입</a>
         </p>
+      </div>
+    </div>
+
+    <!-- 홈: 모드 선택 (로그인 후 항상 여기서 시작) -->
+    <div id="home" class="setup hidden">
+      <div class="setup-card">
+        <h1>🎲 AI GM</h1>
+        <p class="subtitle">무엇을 하시겠어요?</p>
+        <div class="home-choices">
+          <button id="homeGameBtn" class="home-card">
+            <span class="hc-icon">🎲</span>
+            <span class="hc-title">던전 월드</span>
+            <span class="hc-desc">AI가 게임 마스터를 맡는 1인용 TRPG. 주사위·HP·아이템을 규칙대로 관리합니다.</span>
+          </button>
+          <button id="homeChatBtn" class="home-card">
+            <span class="hc-icon">💬</span>
+            <span class="hc-title">캐릭터 챗</span>
+            <span class="hc-desc">세계관과 캐릭터를 직접 만들어 자유롭게 대화. 갤러리에서 남의 세계관도 플레이.</span>
+          </button>
+        </div>
       </div>
     </div>
 

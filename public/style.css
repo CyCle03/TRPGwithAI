@@ -308,6 +308,43 @@ select#setProvider {
   gap: 10px;
   margin-bottom: 16px;
 }
+/* 홈: 모드 선택 카드 */
+.home-choices {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.home-card {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+}
+.home-card:hover {
+  border-color: var(--accent);
+}
+.home-card .hc-icon {
+  font-size: 1.8rem;
+}
+.home-card .hc-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+.home-card .hc-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
 /* 갤러리 정렬·태그 필터 */
 .gallery-controls {
   display: flex;

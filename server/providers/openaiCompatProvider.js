@@ -145,10 +145,18 @@ async function chatStream(
   const decoder = new TextDecoder();
   let buf = '';
   let full = '';
+  // 첫 조각이 오지 않고 멈춰 있는 경우를 따로 잡는다(무한 대기 방지).
+  const STALL_MS = Number(process.env.LOCAL_LLM_STALL_MS || 120000);
+  let stallTimer = setTimeout(() => ctl.abort(), STALL_MS);
+  const bumpStall = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => ctl.abort(), STALL_MS);
+  };
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      bumpStall();
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split('\n');
       buf = lines.pop() || ''; // 마지막 조각은 다음 청크와 이어붙인다
@@ -171,10 +179,17 @@ async function chatStream(
       }
     }
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('응답 시간이 너무 오래 걸려 중단했습니다.');
+    if (e.name === 'AbortError') {
+      throw new Error(
+        full.trim()
+          ? '응답이 도중에 끊겼습니다.'
+          : '모델이 응답을 시작하지 못했습니다(시간 초과). 서버 로컬 AI가 과부하이거나 모델을 불러오는 중일 수 있어요.'
+      );
+    }
     throw e;
   } finally {
     if (timer) clearTimeout(timer);
+    clearTimeout(stallTimer);
   }
   if (!full.trim()) throw new Error('응답이 비어 있습니다.');
   return full;
@@ -200,9 +215,12 @@ function makeProvider({
   timeoutMs = 0, // CPU 추론처럼 느린 엔드포인트용 상한
   autoNoThink = false, // qwen3류 추론 모델의 <think> 낭비를 끄기
 }) {
-  // qwen3 등은 기본이 추론 모드라 <think>에 토큰을 대량 소모한다 → /no_think 지시
-  const withNoThink = (system, model) =>
-    autoNoThink && /qwen3/i.test(String(model || defaultModel)) ? `${system}\n/no_think` : system;
+  // 추론(thinking) 모델만 판별한다. gemma3처럼 추론이 없는 모델에 think 관련 파라미터를
+  // 보내면 서버가 거부하거나 응답이 멈출 수 있으므로 절대 보내지 않는다.
+  const isReasoningModel = (model) =>
+    /qwen3|deepseek-r1|\br1\b|reason|think/i.test(String(model || defaultModel));
+  const noThinkFor = (model) => autoNoThink && isReasoningModel(model);
+  const withNoThink = (system, model) => (noThinkFor(model) ? `${system}\n/no_think` : system);
   const resolveBase = (callBaseURL) => {
     const b = dynamicBaseURL ? normBase(callBaseURL) : baseURL;
     if (!b) throw new Error(`${name} 엔드포인트 주소(baseURL)를 설정에서 입력하세요. 예: http://호스트:11434/v1`);
@@ -242,7 +260,7 @@ function makeProvider({
         false,
         maxTokens,
         timeoutMs,
-        autoNoThink
+        noThinkFor(model)
       );
     },
     /** 스트리밍 캐릭터 챗 — 생성되는 대로 onChunk로 흘려보낸다. */
@@ -256,7 +274,7 @@ function makeProvider({
         messages,
         maxTokens,
         timeoutMs,
-        autoNoThink,
+        noThinkFor(model),
         onChunk
       );
     },
