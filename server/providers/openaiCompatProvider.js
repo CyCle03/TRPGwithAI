@@ -34,8 +34,20 @@ function toOpenAIMessages(system, messages) {
   ];
 }
 
-async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, jsonMode = true, maxTokens) {
+async function chat(
+  baseURL,
+  apiKey,
+  model,
+  defaultModel,
+  systemText,
+  messages,
+  jsonMode = true,
+  maxTokens,
+  timeoutMs = 0
+) {
   let res;
+  const ctl = timeoutMs ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
   try {
     const body = {
       model: model || defaultModel,
@@ -47,9 +59,15 @@ async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
+      signal: ctl ? ctl.signal : undefined,
     });
   } catch (e) {
+    if (e.name === 'AbortError') {
+      throw new Error('응답 시간이 너무 오래 걸려 중단했습니다. 잠시 후 다시 시도해주세요.');
+    }
     throw new Error('네트워크 오류: ' + e.message);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
@@ -72,15 +90,21 @@ function normBase(url) {
  * @param {string|null} p.baseURL  고정 엔드포인트. dynamicBaseURL=true면 호출 시 인자로 받음.
  * @param {boolean} [p.dynamicBaseURL]  Ollama·자체 호스팅처럼 사용자가 baseURL을 지정하는 경우.
  */
-function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
-  // dynamic이면 키 없이도 허용(로컬 Ollama 등). 아니면 키 필수.
+function makeProvider({
+  name,
+  baseURL,
+  defaultModel,
+  dynamicBaseURL = false,
+  keyOptional = false, // 서버가 운영하는 로컬 모델 등, 사용자 키가 필요 없는 경우
+  timeoutMs = 0, // CPU 추론처럼 느린 엔드포인트용 상한
+}) {
   const resolveBase = (callBaseURL) => {
     const b = dynamicBaseURL ? normBase(callBaseURL) : baseURL;
     if (!b) throw new Error(`${name} 엔드포인트 주소(baseURL)를 설정에서 입력하세요. 예: http://호스트:11434/v1`);
     return b;
   };
   const resolveKey = (apiKey) => {
-    if (dynamicBaseURL) return apiKey || 'local'; // Ollama 등은 인증 불필요 → 더미 토큰
+    if (dynamicBaseURL || keyOptional) return apiKey || 'local'; // 인증 불필요 → 더미 토큰
     if (!apiKey) throw new Error(`${name} API 키가 없습니다. 설정에서 본인 키를 등록하세요.`);
     return apiKey;
   };
@@ -89,11 +113,11 @@ function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
     DEFAULT_MODEL: defaultModel,
     async generate({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
       const system = `${staticSystem}\n\n${dynamicSystem}\n\n${GM_JSON_HINT}`;
-      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages);
+      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, true, undefined, timeoutMs);
     },
     async generateSuggestions({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
       const system = `${staticSystem}\n\n${dynamicSystem}\n\n${SUGGEST_JSON_HINT}`;
-      const text = await chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages);
+      const text = await chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, true, undefined, timeoutMs);
       try {
         const obj = JSON.parse(text);
         return JSON.stringify(obj.suggestions || []);
@@ -103,7 +127,7 @@ function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
     },
     // 캐릭터 챗: JSON 모드 없이 일반 텍스트
     async generateChat({ apiKey, model, baseURL: cbu, system, messages, maxTokens }) {
-      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false, maxTokens);
+      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false, maxTokens, timeoutMs);
     },
     /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */
     async listModels({ apiKey, baseURL: cbu }) {

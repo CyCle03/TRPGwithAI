@@ -184,6 +184,12 @@ function wireSocket() {
     defaultModels = data.defaultModels || defaultModels;
     knownModels = data.knownModels || knownModels;
     if (Array.isArray(data.providers)) providersList = data.providers;
+    // 서버에 로컬 AI가 설정된 경우에만 '무료 체험' 선택지를 노출
+    const freeOn = providersList.includes('free');
+    ['setFreeOpt', 'gmFreeOpt'].forEach((id) => {
+      const o = document.getElementById(id);
+      if (o) o.hidden = !freeOn;
+    });
     if (data.username) userNameEl.textContent = data.username;
     amAdmin = !!data.isAdmin;
     if (adminPanelEl) adminPanelEl.classList.toggle('hidden', !amAdmin);
@@ -291,6 +297,7 @@ const PROVIDER_LABELS = {
   xai: 'Grok',
   qwen: 'Qwen',
   custom: '커스텀',
+  free: '무료 체험',
 };
 const KEY_URLS = {
   gemini: { url: 'aistudio.google.com/apikey', note: '무료 키 발급 가능(카드 불필요)' },
@@ -300,6 +307,7 @@ const KEY_URLS = {
   xai: { url: 'console.x.ai', note: '유료' },
   qwen: { url: 'bailian.console.alibabacloud.com', note: '유료(신규 무료 크레딧 제공)' },
   custom: { url: 'Ollama/LM Studio 등', note: '자체 호스팅은 키가 필요 없을 수 있음(비우면 됨)' },
+  free: { url: '발급 불필요', note: '서버의 로컬 AI로 무료 체험 (느리고 사용량 제한 있음)' },
 };
 
 /** 활성 게임의 제공자에 키가 등록돼 있는지. custom은 baseURL 기준. */

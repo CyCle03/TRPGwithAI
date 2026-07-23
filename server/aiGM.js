@@ -42,9 +42,27 @@ const KNOWN_MODELS = {
   xai: ['grok-4.5'],
   qwen: ['qwen3.6-flash', 'qwen3.7-plus', 'qwen3.7-max', 'qwen3.8-max-preview'],
   custom: ['llama3.1', 'qwen3', 'gemma3', 'mistral'], // Ollama에서 흔한 로컬 모델 예시
+  free: [], // 서버가 정한 모델만 사용
 };
 
+/**
+ * 무료 체험(서버의 로컬 LLM). LOCAL_LLM_URL이 설정된 경우에만 노출된다.
+ * 사용자 API 키가 필요 없고, CPU 추론이라 느리므로 타임아웃을 길게 준다.
+ */
+const LOCAL_LLM_URL = String(process.env.LOCAL_LLM_URL || '').trim();
+const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || 'qwen3:4b';
+if (LOCAL_LLM_URL) {
+  PROVIDERS.free = makeProvider({
+    name: '무료 체험',
+    baseURL: LOCAL_LLM_URL.replace(/\/+$/, ''),
+    defaultModel: LOCAL_LLM_MODEL,
+    keyOptional: true,
+    timeoutMs: Number(process.env.LOCAL_LLM_TIMEOUT_MS || 180000),
+  });
+}
+
 const PROVIDER_NAMES = Object.keys(PROVIDERS);
+const FREE_ENABLED = !!LOCAL_LLM_URL;
 
 function pickProvider(name) {
   return PROVIDERS[name] || PROVIDERS.gemini;
@@ -302,4 +320,5 @@ module.exports = {
   defaultModel,
   PROVIDER_NAMES,
   KNOWN_MODELS,
+  FREE_ENABLED,
 };

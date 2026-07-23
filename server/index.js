@@ -257,6 +257,45 @@ function slotList(ug) {
   };
 }
 
+// ---------- 무료 체험(서버 로컬 LLM) 사용 제한 ----------
+// CPU 추론이라 동시에 여러 명이 쓰면 서버 전체가 느려진다 → 한 번에 1명 + 사용자별 시간당 횟수 제한.
+const FREE_LIMIT_PER_HOUR = Number(process.env.FREE_LIMIT_PER_HOUR || 30);
+const freeUsage = new Map(); // userId -> { count, resetAt }
+let freeBusy = false;
+
+/** 사용 가능하면 null, 아니면 사용자에게 보여줄 사유 문자열. */
+function freeGateReason(userId) {
+  if (freeBusy) return '무료 체험은 한 번에 한 분씩만 쓸 수 있어요. 잠시 후 다시 시도해주세요.';
+  const now = Date.now();
+  let u = freeUsage.get(userId);
+  if (!u || now > u.resetAt) {
+    u = { count: 0, resetAt: now + 3600000 };
+    freeUsage.set(userId, u);
+  }
+  if (u.count >= FREE_LIMIT_PER_HOUR) {
+    const min = Math.ceil((u.resetAt - now) / 60000);
+    return `무료 체험은 시간당 ${FREE_LIMIT_PER_HOUR}회까지예요(${min}분 후 초기화). ⚙ 설정에서 본인 API 키를 등록하면 제한 없이 쓸 수 있습니다.`;
+  }
+  return null;
+}
+
+/** provider가 'free'면 제한을 걸고 실행. 아니면 그대로 실행. */
+async function withFreeGate(provider, userId, emit, fn) {
+  if (provider !== 'free') return fn();
+  const reason = freeGateReason(userId);
+  if (reason) {
+    emit('error', { message: reason });
+    return;
+  }
+  freeBusy = true;
+  freeUsage.get(userId).count += 1;
+  try {
+    return await fn();
+  } finally {
+    freeBusy = false;
+  }
+}
+
 // 운영자 계정(신고 처리 권한). .env의 ADMIN_USER로 변경 가능.
 const ADMIN_USER = (process.env.ADMIN_USER || 'elcher').toLowerCase();
 function isAdmin(user) {
@@ -397,6 +436,7 @@ io.on('connection', (socket) => {
     const provider = slot.ai.provider || 'gemini';
     const cfg = auth.getAiConfig(userId, provider);
     slot.game.setAiConfig({ provider, model: slot.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+    if (provider === 'free') return true; // 서버 로컬 모델 — 사용자 키 불필요
     if (provider === 'custom') {
       if (!cfg.baseURL) {
         emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
@@ -434,7 +474,9 @@ io.on('connection', (socket) => {
     if (!ensureAi()) return;
     g.busy = true;
     try {
-      await g.createCharacter(emit, payload || {});
+      await withFreeGate(active().ai.provider, userId, emit, () =>
+        g.createCharacter(emit, payload || {})
+      );
     } catch (e) {
       console.error(e);
       emit('error', { message: '캐릭터 생성 실패: ' + e.message });
@@ -452,7 +494,9 @@ io.on('connection', (socket) => {
     if (!ensureAi()) return;
     g.busy = true;
     try {
-      await g.playerAction(emit, payload && payload.text);
+      await withFreeGate(active().ai.provider, userId, emit, () =>
+        g.playerAction(emit, payload && payload.text)
+      );
     } catch (e) {
       console.error(e);
       emit('error', { message: '행동 처리 실패: ' + e.message });
@@ -773,14 +817,22 @@ io.on('connection', (socket) => {
 
     const provider = c.ai.provider || 'gemini';
     const cfg = auth.getAiConfig(userId, provider);
-    if (provider === 'custom') {
+    if (provider === 'free') {
+      // 서버 로컬 모델 — 키 불필요, 대신 사용량 제한
+    } else if (provider === 'custom') {
       if (!cfg.baseURL) return emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
     } else if (!cfg.apiKey) {
       return emit('error', { message: `현재 챗의 제공자(${provider}) API 키가 없습니다. ⚙ 설정에서 등록하세요.` });
     }
+    const gate = provider === 'free' ? freeGateReason(userId) : null;
+    if (gate) return emit('error', { message: gate });
 
     c.messages.push({ role: 'user', content: text }); // 사용자 메시지는 클라가 즉시 렌더
     chatBusy = true;
+    if (provider === 'free') {
+      freeBusy = true;
+      freeUsage.get(userId).count += 1;
+    }
     emit('chatThinking', { on: true });
     try {
       const len = chat.effectiveLength(c.def, c.lengthOverride);
@@ -805,6 +857,7 @@ io.on('connection', (socket) => {
       emit('chatRollback', {});
     } finally {
       chatBusy = false;
+      if (provider === 'free') freeBusy = false;
       emit('chatThinking', { on: false });
       persistChats(userId, uc);
     }
