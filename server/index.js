@@ -257,6 +257,12 @@ function slotList(ug) {
   };
 }
 
+// 운영자 계정(신고 처리 권한). .env의 ADMIN_USER로 변경 가능.
+const ADMIN_USER = (process.env.ADMIN_USER || 'elcher').toLowerCase();
+function isAdmin(user) {
+  return !!(user && String(user.username || '').toLowerCase() === ADMIN_USER);
+}
+
 // ---------- 캐릭터 챗 (게임 슬롯과 별도) ----------
 const userChats = new Map(); // userId -> { activeId, chats:{id:{id, ai, persona, messages}} }
 
@@ -321,20 +327,39 @@ function isBorrowed(c, userId) {
   return !!(c && c.sourceOwnerId && c.sourceOwnerId !== userId);
 }
 
+/**
+ * 남의 세계관은 정의(프롬프트)를 클라이언트로 보내지 않는다.
+ * 표시에 꼭 필요한 제목·등장인물 이름만 남기고 설정·시나리오·이미지태그는 제거.
+ */
+function redactDef(def) {
+  const d = def || {};
+  return {
+    worldTitle: d.worldTitle || '',
+    worldLore: '',
+    characters: (d.characters || []).map((c) => ({ name: c.name, description: '' })),
+    images: [],
+    scenario: '',
+    greeting: '',
+    userPersona: '',
+    responseLength: d.responseLength || 'medium',
+  };
+}
+
 function chatStatePayload(c, ownerId) {
   if (!c) return null;
   const entry = c.publishedId ? publish.get(c.publishedId, ownerId) : null;
+  const borrowed = isBorrowed(c, ownerId);
   return {
     chatId: c.id,
     ai: { provider: c.ai.provider || 'gemini', model: c.ai.model || '' },
-    def: c.def || chat.normalizeDef({}),
+    def: borrowed ? redactDef(c.def) : c.def || chat.normalizeDef({}),
     configured: chat.isConfigured(c.def),
     messages: c.messages || [],
     responseLength: (c.def && c.def.responseLength) || 'medium', // 제작자 권장 출력량
     lengthOverride: c.lengthOverride || null, // 플레이어 설정(null=권장 따름)
     published: entry ? { id: entry.id, visibility: entry.visibility, plays: entry.plays || 0 } : null,
     source: c.sourceId ? { id: c.sourceId, ownerName: c.sourceOwner } : null,
-    readOnly: isBorrowed(c, ownerId), // 남의 세계관 → 정의 수정 불가
+    readOnly: borrowed, // 남의 세계관 → 정의 수정 불가 + 프롬프트 비공개
   };
 }
 
@@ -389,6 +414,7 @@ io.on('connection', (socket) => {
   socket.emit('init', {
     username: user ? user.username : null,
     settings: user ? user.settings : null,
+    isAdmin: isAdmin(user),
     providers: aiGM.PROVIDER_NAMES,
     defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
     knownModels: aiGM.KNOWN_MODELS, // 키 없이도 보여줄 추천 모델 후보
@@ -648,6 +674,40 @@ io.on('connection', (socket) => {
   });
 
   socket.on('galleryList', () => {
+    emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
+  });
+
+  // 신고 접수 (본인 작품·중복 신고 불가)
+  socket.on('reportPublished', (payload) => {
+    try {
+      const n = publish.addReport(payload && payload.id, userId, payload && payload.reason);
+      emit('reportDone', { id: payload.id, count: n });
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+
+  // 운영자: 신고 목록 조회
+  socket.on('adminReports', () => {
+    if (!isAdmin(user)) return emit('error', { message: '권한이 없습니다.' });
+    emit('adminReports', { items: publish.listReported() });
+  });
+
+  // 운영자: 차단 / 차단해제 / 삭제 / 신고기록 삭제
+  socket.on('adminAction', (payload) => {
+    if (!isAdmin(user)) return emit('error', { message: '권한이 없습니다.' });
+    const { id, action } = payload || {};
+    if (!id) return;
+    try {
+      if (action === 'block') publish.blockEntry(id);
+      else if (action === 'unblock') publish.unblockEntry(id);
+      else if (action === 'delete') publish.removeEntry(id);
+      else if (action === 'clear') publish.clearReports(id);
+      else return emit('error', { message: '알 수 없는 조치입니다.' });
+    } catch (e) {
+      return emit('error', { message: e.message });
+    }
+    emit('adminReports', { items: publish.listReported() });
     emit('gallery', { items: publish.listPublic(), mine: publish.listMine(userId) });
   });
 

@@ -128,6 +128,9 @@ const galleryEl = document.getElementById('gallery');
 const galleryBtn = document.getElementById('galleryBtn');
 const galleryListEl = document.getElementById('galleryList');
 const galleryMineEl = document.getElementById('galleryMine');
+const adminPanelEl = document.getElementById('adminPanel');
+const adminListEl = document.getElementById('adminList');
+let amAdmin = false;
 const galleryCloseBtn = document.getElementById('galleryClose');
 const cpVisibilityEl = document.getElementById('cpVisibility');
 const cpPublishBtn = document.getElementById('cpPublish');
@@ -182,6 +185,8 @@ function wireSocket() {
     knownModels = data.knownModels || knownModels;
     if (Array.isArray(data.providers)) providersList = data.providers;
     if (data.username) userNameEl.textContent = data.username;
+    amAdmin = !!data.isAdmin;
+    if (adminPanelEl) adminPanelEl.classList.toggle('hidden', !amAdmin);
     userBarEl.classList.remove('hidden');
     // 모드/챗 상태 초기화(재접속·계정 전환 대비)
     currentMode = 'gm';
@@ -237,6 +242,8 @@ function wireSocket() {
     updateChatModelLabel();
   });
   socket.on('chatRollback', () => removeLastChatUserMsg());
+  socket.on('reportDone', ({ count }) => alert(`신고가 접수되었습니다. (누적 ${count}건)`));
+  socket.on('adminReports', ({ items }) => renderAdminReports(items));
   socket.on('gallery', (data) => {
     renderGalleryList(galleryListEl, data.items, false);
     renderGalleryList(galleryMineEl, data.mine, true);
@@ -570,13 +577,25 @@ function renderGalleryList(el, items, mine) {
       `<div class="gi-title"></div><div class="gi-meta"></div><div class="gi-sum"></div>`;
     body.querySelector('.gi-title').textContent = it.title;
     body.querySelector('.gi-meta').textContent = meta;
-    body.querySelector('.gi-sum').textContent = it.summary || (it.characters || []).join(', ');
+    body.querySelector('.gi-sum').textContent = (it.characters || []).join(', ');
     card.appendChild(body);
     const play = document.createElement('button');
     play.className = 'primary gi-play';
     play.textContent = '플레이';
     play.addEventListener('click', () => socket.emit('playPublished', { id: it.id }));
     card.appendChild(play);
+    if (!mine) {
+      const rep = document.createElement('button');
+      rep.className = 'ghost gi-play';
+      rep.textContent = '🚩 신고';
+      rep.title = '부적절한 내용 신고';
+      rep.addEventListener('click', () => {
+        const reason = prompt(`"${it.title}"을(를) 신고하는 이유를 적어주세요.`);
+        if (reason === null) return;
+        socket.emit('reportPublished', { id: it.id, reason });
+      });
+      card.appendChild(rep);
+    }
     if (mine) {
       const un = document.createElement('button');
       un.className = 'ghost gi-play';
@@ -589,6 +608,46 @@ function renderGalleryList(el, items, mine) {
       card.appendChild(un);
     }
     el.appendChild(card);
+  });
+}
+
+/** 운영자용 신고 목록 렌더. */
+function renderAdminReports(items) {
+  if (!adminListEl) return;
+  adminListEl.innerHTML = '';
+  if (!items || !items.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = '신고된 항목이 없습니다.';
+    adminListEl.appendChild(p);
+    return;
+  }
+  items.forEach((it) => {
+    const card = document.createElement('div');
+    card.className = 'gallery-card-item';
+    const body = document.createElement('div');
+    body.className = 'gi-body';
+    body.innerHTML = `<div class="gi-title"></div><div class="gi-meta"></div><div class="gi-sum"></div>`;
+    body.querySelector('.gi-title').textContent = `🚩 ${it.reportCount}건 · ${it.title}`;
+    body.querySelector('.gi-meta').textContent =
+      `by ${it.ownerName} · ${VIS_LABEL[it.visibility] || it.visibility}${it.blocked ? ' · 차단됨' : ''}`;
+    body.querySelector('.gi-sum').textContent = (it.reasons || []).join(' / ') || '(사유 없음)';
+    card.appendChild(body);
+    const act = (label, action, confirmMsg) => {
+      const b = document.createElement('button');
+      b.className = 'ghost gi-play';
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        if (confirmMsg && !confirm(confirmMsg)) return;
+        socket.emit('adminAction', { id: it.id, action });
+      });
+      card.appendChild(b);
+    };
+    if (it.blocked) act('차단 해제', 'unblock');
+    else act('차단', 'block', `"${it.title}"을(를) 차단할까요? 비공개로 내려가고 재공개가 막힙니다.`);
+    act('삭제', 'delete', `"${it.title}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`);
+    act('신고 무시', 'clear');
+    adminListEl.appendChild(card);
   });
 }
 
@@ -1220,8 +1279,12 @@ cpAddCharBtn.addEventListener('click', () => {
   renderCharEditors();
 });
 const cpGalleryBtn = document.getElementById('cpGallery');
-galleryBtn.addEventListener('click', () => socket.emit('galleryList'));
-cpGalleryBtn.addEventListener('click', () => socket.emit('galleryList'));
+function openGallery() {
+  socket.emit('galleryList');
+  if (amAdmin) socket.emit('adminReports');
+}
+galleryBtn.addEventListener('click', openGallery);
+cpGalleryBtn.addEventListener('click', openGallery);
 galleryCloseBtn.addEventListener('click', () => setMode('chat'));
 cpPublishBtn.addEventListener('click', () => {
   const def = collectDef();

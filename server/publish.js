@@ -49,6 +49,7 @@ function publish({ pubId, ownerId, ownerName, def, visibility, title }) {
   const db = loadAll();
   let entry = pubId ? db.entries[pubId] : null;
   if (entry && entry.ownerId !== ownerId) throw new Error('본인이 공개한 항목만 수정할 수 있습니다.');
+  if (entry && entry.blocked) throw new Error('운영자가 차단한 항목이라 다시 공개할 수 없습니다.');
   const id = entry ? entry.id : newPubId();
   const now = new Date().toISOString();
   entry = {
@@ -112,7 +113,9 @@ function summarize(e) {
     characterCount: chars.length,
     imageCount: (d.images || []).length,
     coverImageId: (d.images || [])[0] ? d.images[0].id : null,
-    summary: String(d.worldLore || d.scenario || '').slice(0, 120),
+    // 세계관·시나리오 본문은 노출하지 않는다(프롬프트 유출 방지). 등장인물 이름만 미리보기.
+    reports: e.reports || 0,
+    blocked: !!e.blocked,
   };
 }
 
@@ -132,6 +135,87 @@ function bumpPlays(pubId) {
   if (!e) return;
   e.plays = (e.plays || 0) + 1;
   saveAll(db);
+}
+
+// ---------- 신고 / 운영자 조치 ----------
+
+/** 신고 접수. 같은 사용자가 같은 항목을 중복 신고할 수 없다. */
+function addReport(pubId, reporterId, reason) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) throw new Error('없는 항목입니다.');
+  if (e.ownerId === reporterId) throw new Error('본인 작품은 신고할 수 없습니다.');
+  db.reports = db.reports || {};
+  const list = db.reports[pubId] || [];
+  if (list.some((r) => r.userId === reporterId)) throw new Error('이미 신고한 항목입니다.');
+  list.push({
+    userId: reporterId,
+    reason: String(reason || '').slice(0, 300),
+    at: new Date().toISOString(),
+  });
+  db.reports[pubId] = list;
+  e.reports = list.length;
+  saveAll(db);
+  return list.length;
+}
+
+/** 신고된 항목 목록(운영자용, 신고 많은 순). */
+function listReported() {
+  const db = loadAll();
+  const reports = db.reports || {};
+  return Object.keys(reports)
+    .map((id) => {
+      const e = db.entries[id];
+      if (!e) return null;
+      return {
+        ...summarize(e),
+        reportCount: reports[id].length,
+        reasons: reports[id].map((r) => r.reason).filter(Boolean).slice(0, 10),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.reportCount - a.reportCount);
+}
+
+/** 차단: 비공개로 내리고 재공개를 막는다. */
+function blockEntry(pubId) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) return null;
+  e.blocked = true;
+  e.visibility = 'private';
+  e.updatedAt = new Date().toISOString();
+  saveAll(db);
+  return e;
+}
+
+/** 차단 해제. */
+function unblockEntry(pubId) {
+  const db = loadAll();
+  const e = db.entries[pubId];
+  if (!e) return null;
+  e.blocked = false;
+  saveAll(db);
+  return e;
+}
+
+/** 운영자 삭제(신고 기록도 함께 제거). */
+function removeEntry(pubId) {
+  const db = loadAll();
+  if (!db.entries[pubId]) return false;
+  delete db.entries[pubId];
+  if (db.reports) delete db.reports[pubId];
+  saveAll(db);
+  return true;
+}
+
+/** 신고 기록만 지우기(문제없다고 판단한 경우). */
+function clearReports(pubId) {
+  const db = loadAll();
+  if (db.reports) delete db.reports[pubId];
+  if (db.entries[pubId]) db.entries[pubId].reports = 0;
+  saveAll(db);
+  return true;
 }
 
 /** 공개 항목의 소유자를 변경한다(샘플 → 실제 계정 이관용). */
@@ -166,6 +250,12 @@ module.exports = {
   get,
   bumpPlays,
   transferOwner,
+  addReport,
+  listReported,
+  blockEntry,
+  unblockEntry,
+  removeEntry,
+  clearReports,
   hasSeed,
   markSeed,
   VISIBILITIES,
