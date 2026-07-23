@@ -1,7 +1,37 @@
 'use strict';
 
+const path = require('path');
 const publish = require('./publish');
 const chat = require('./chat');
+const uploads = require('./uploads');
+
+/** 저장소에 포함된 샘플 이미지 → 고정 id로 등록해 정의에 넣는다. */
+const SAMPLE_IMAGES = [
+  {
+    id: '5a11e0ba51a00001',
+    file: 'harbor.png',
+    tag: '안개 부두',
+    description: '부두·항구 야외 장면. 도착하거나 배를 보거나 리안과 부두에서 대화할 때',
+  },
+  {
+    id: '5a11e0ba51a00002',
+    file: 'lighthouse.png',
+    tag: '등대',
+    description: '등대가 언급되거나 등대로 향할 때, 등대 불빛의 비밀이 드러날 때',
+  },
+  {
+    id: '5a11e0ba51a00003',
+    file: 'tavern.png',
+    tag: '젖은 등불',
+    description: '선술집 안으로 들어가거나 마르타와 대화할 때',
+  },
+  {
+    id: '5a11e0ba51a00004',
+    file: 'nightsea.png',
+    tag: '밤바다',
+    description: '바다·바다의 노래·배의 실종 등 불길한 장면',
+  },
+];
 
 /**
  * 갤러리 샘플 세계관을 최초 1회만 등록한다.
@@ -10,6 +40,7 @@ const chat = require('./chat');
  */
 
 const SEED_KEY = 'sampleV1';
+const IMAGE_SEED_KEY = 'sampleImagesV1';
 
 const SAMPLE_DEF = {
   worldTitle: '잿빛 항구, 세이렌',
@@ -44,7 +75,7 @@ const SAMPLE_DEF = {
 말투: 조심스러운 존댓말, 자주 말끝을 흐림. "…저, 제가 여기 있어도 되나요?" "이 노래… 어디서 들었더라."`,
     },
   ],
-  images: [],
+  images: SAMPLE_IMAGES.map((im) => ({ id: im.id, tag: im.tag, description: im.description })),
   scenario: `당신은 반년 전 베일포트로 떠난 뒤 소식이 끊긴 형제를 찾아 이 도시에 막 도착한 외지인이다.
 마지막 편지에는 이렇게 적혀 있었다. "등대 불빛이 이상해. 저건 우리를 부르는 게 아니야."
 지금은 안개 낀 늦은 저녁. 부두에 발을 디딘 참이고, 저 멀리 등대가 느리게 회전하고 있다.`,
@@ -59,20 +90,53 @@ const SAMPLE_DEF = {
   userPersona: '실종된 형제를 찾아 베일포트에 온 외지인. 이 도시에 연고도, 아는 사람도 없다.',
 };
 
+/** 샘플 이미지 파일을 uploads에 고정 id로 등록. */
+function importSampleImages() {
+  const dir = path.join(__dirname, '..', 'assets', 'sample');
+  let n = 0;
+  for (const im of SAMPLE_IMAGES) {
+    if (uploads.importFile(path.join(dir, im.file), im.id, 'png')) n++;
+  }
+  return n;
+}
+
 function seed() {
   try {
-    if (publish.hasSeed(SEED_KEY)) return;
-    const def = chat.normalizeDef(SAMPLE_DEF);
-    if (!chat.isConfigured(def)) return;
+    importSampleImages(); // 파일은 매번 확인(없으면 복사, 있으면 건너뜀)
+
+    // 1) 최초 등록
+    if (!publish.hasSeed(SEED_KEY)) {
+      const def = chat.normalizeDef(SAMPLE_DEF);
+      if (!chat.isConfigured(def)) return;
+      publish.publish({
+        ownerId: '__sample__',
+        ownerName: '샘플',
+        def,
+        visibility: 'public',
+        title: def.worldTitle,
+      });
+      publish.markSeed(SEED_KEY);
+      console.log('🌐 갤러리 샘플 세계관을 등록했습니다:', def.worldTitle);
+      return;
+    }
+
+    // 2) 이미 등록된 샘플에 이미지가 없으면 채워 넣는다(이미지 추가 배포 대응)
+    if (publish.hasSeed(IMAGE_SEED_KEY)) return;
+    const mine = publish.listMine('__sample__');
+    if (!mine.length) return;
+    const entry = publish.get(mine[0].id, '__sample__');
+    if (!entry) return;
+    const def = chat.normalizeDef({ ...entry.def, images: SAMPLE_DEF.images });
     publish.publish({
+      pubId: entry.id,
       ownerId: '__sample__',
       ownerName: '샘플',
       def,
-      visibility: 'public',
-      title: def.worldTitle,
+      visibility: entry.visibility,
+      title: entry.title,
     });
-    publish.markSeed(SEED_KEY);
-    console.log('🌐 갤러리 샘플 세계관을 등록했습니다:', def.worldTitle);
+    publish.markSeed(IMAGE_SEED_KEY);
+    console.log('🖼️  샘플 세계관에 이미지', def.images.length, '장을 추가했습니다.');
   } catch (e) {
     console.error('갤러리 샘플 등록 실패:', e.message);
   }

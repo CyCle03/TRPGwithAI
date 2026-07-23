@@ -2,3 +2,6 @@ node_modules/
 .env
 data/
 *.log
+
+# PixAI 원본 생성물(선택된 것만 assets/sample 에 보관)
+from-PixAI-*.png

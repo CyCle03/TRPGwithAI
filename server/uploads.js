@@ -53,4 +53,17 @@ function resolve(id) {
   return null;
 }
 
-module.exports = { saveDataUrl, resolve, MAX_BYTES };
+/**
+ * 저장소에 포함된 파일을 고정 id로 uploads에 등록한다(샘플 이미지 시딩용).
+ * 이미 있으면 건너뛴다.
+ */
+function importFile(srcPath, id, ext = 'png') {
+  const safe = String(id || '').replace(/[^a-f0-9]/gi, '');
+  if (!safe || !fs.existsSync(srcPath)) return null;
+  ensureDir();
+  const dest = path.join(UP_DIR, `${safe}.${ext}`);
+  if (!fs.existsSync(dest)) fs.copyFileSync(srcPath, dest);
+  return safe;
+}
+
+module.exports = { saveDataUrl, resolve, importFile, MAX_BYTES };
