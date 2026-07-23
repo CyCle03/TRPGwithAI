@@ -908,9 +908,14 @@ button.primary:disabled {
 .log-pane {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* 상단 유저바 여백 때문에 실제 칸은 100vh보다 작다 → 칸을 채우도록 100% */
+  height: 100%;
+  min-height: 0;
   border-right: 1px solid var(--border);
   min-width: 0;
+}
+.log-pane .log {
+  min-height: 0; /* flex 자식이 내용보다 작아질 수 있게 (입력창이 밀려나지 않도록) */
 }
 .log-header {
   display: flex;
