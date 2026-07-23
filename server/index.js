@@ -917,9 +917,9 @@ io.on('connection', (socket) => {
     }
     emit('chatThinking', { on: true });
     try {
-      // 무료 체험(CPU 로컬 모델)은 생성 시간이 길이에 비례하므로 짧게 제한
+      // 무료 체험(CPU 로컬 모델)은 초당 생성 토큰이 적어 길이를 최소로 제한한다.
       const len =
-        provider === 'free' ? 'short' : chat.effectiveLength(c.def, c.lengthOverride);
+        provider === 'free' ? 'veryshort' : chat.effectiveLength(c.def, c.lengthOverride);
       const system = chat.buildSystemPrompt(c.def, len);
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const reply = await aiGM.chatReply(

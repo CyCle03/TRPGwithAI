@@ -50,7 +50,8 @@ const KNOWN_MODELS = {
  * 사용자 API 키가 필요 없고, CPU 추론이라 느리므로 타임아웃을 길게 준다.
  */
 const LOCAL_LLM_URL = String(process.env.LOCAL_LLM_URL || '').trim();
-const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || 'qwen3:4b';
+// 기본값은 추론(thinking) 단계가 없는 모델. qwen3류는 사고에 토큰을 다 써서 CPU에선 부적합.
+const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || 'gemma3:4b';
 if (LOCAL_LLM_URL) {
   PROVIDERS.free = makeProvider({
     name: '무료 체험',

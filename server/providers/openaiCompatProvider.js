@@ -43,7 +43,8 @@ async function chat(
   messages,
   jsonMode = true,
   maxTokens,
-  timeoutMs = 0
+  timeoutMs = 0,
+  noThink = false
 ) {
   let res;
   const ctl = timeoutMs ? new AbortController() : null;
@@ -55,6 +56,11 @@ async function chat(
     };
     if (jsonMode) body.response_format = { type: 'json_object' };
     if (maxTokens) body.max_tokens = maxTokens;
+    if (noThink) {
+      // 추론형 모델의 사고 단계를 끈다. 지원하지 않는 서버는 무시한다.
+      body.think = false;
+      body.reasoning_effort = 'none';
+    }
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -74,8 +80,17 @@ async function chat(
     throw new Error(`API 오류 ${res.status}: ${t.slice(0, 160)}`);
   }
   const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('응답이 비어 있습니다.');
+  const msg = data?.choices?.[0]?.message || {};
+  const content = msg.content;
+  if (!content) {
+    // 추론형 모델이 사고(reasoning)에만 토큰을 다 쓰고 본문을 못 낸 경우
+    if (msg.reasoning || msg.reasoning_content) {
+      throw new Error(
+        '모델이 생각만 하다 답변을 내지 못했습니다. 추론(thinking) 없는 모델(예: gemma3, qwen2.5)로 바꾸는 걸 권장합니다.'
+      );
+    }
+    throw new Error('응답이 비어 있습니다.');
+  }
   return content;
 }
 
@@ -140,7 +155,8 @@ function makeProvider({
         messages,
         false,
         maxTokens,
-        timeoutMs
+        timeoutMs,
+        autoNoThink
       );
     },
     /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */
