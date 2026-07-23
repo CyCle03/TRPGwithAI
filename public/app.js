@@ -132,6 +132,9 @@ const galleryCloseBtn = document.getElementById('galleryClose');
 const cpVisibilityEl = document.getElementById('cpVisibility');
 const cpPublishBtn = document.getElementById('cpPublish');
 const cpPublishHintEl = document.getElementById('cpPublishHint');
+const cpLengthEl = document.getElementById('cpLength');
+const gmLengthRowEl = document.getElementById('gmLengthRow');
+const gmLengthEl = document.getElementById('gmLength');
 const cpImagesEl = document.getElementById('cpImages');
 const cpImageFileEl = document.getElementById('cpImageFile');
 const cpAddImageBtn = document.getElementById('cpAddImage');
@@ -673,6 +676,7 @@ function openChatSetupForm(data) {
   cpScenarioEl.value = d.scenario || '';
   cpGreetingEl.value = d.greeting || '';
   cpUserPersonaEl.value = d.userPersona || '';
+  cpLengthEl.value = d.responseLength || 'medium';
   updatePublishHint(data && data.published);
   chatSetupErrorEl.classList.add('hidden');
   showChatSetup();
@@ -691,6 +695,7 @@ function collectDef() {
     scenario: cpScenarioEl.value.trim(),
     greeting: cpGreetingEl.value.trim(),
     userPersona: cpUserPersonaEl.value.trim(),
+    responseLength: cpLengthEl.value, // 제작자 권장 출력량
   };
 }
 
@@ -1084,6 +1089,15 @@ function openModelModal(context) {
   gameModelErrorEl.classList.add('hidden');
   gmProviderEl.value = ai.provider || 'gemini';
   gmModelEl.value = ai.model || '';
+  // 응답 길이는 챗에서만 (제작자 권장 + 내 설정)
+  const isChat = context === 'chat';
+  gmLengthRowEl.classList.toggle('hidden', !isChat);
+  if (isChat) {
+    const rec = (currentChat && currentChat.responseLength) || 'medium';
+    const recLabel = { short: '짧게', medium: '보통', long: '길게' }[rec] || rec;
+    gmLengthEl.options[0].textContent = `제작자 권장 따르기 (${recLabel})`;
+    gmLengthEl.value = (currentChat && currentChat.lengthOverride) || '';
+  }
   updateGameModelHint();
   gameModelModal.classList.remove('hidden');
 }
@@ -1154,7 +1168,12 @@ gmProviderEl.addEventListener('change', updateGameModelHint);
 gmCancelBtn.addEventListener('click', () => gameModelModal.classList.add('hidden'));
 gmSaveBtn.addEventListener('click', () => {
   const payload = { provider: gmProviderEl.value, model: gmModelEl.value.trim() };
-  socket.emit(modelModalContext === 'chat' ? 'setChatModel' : 'setGameModel', payload);
+  if (modelModalContext === 'chat') {
+    socket.emit('setChatModel', payload);
+    socket.emit('setChatLength', { length: gmLengthEl.value || null });
+  } else {
+    socket.emit('setGameModel', payload);
+  }
   gameModelModal.classList.add('hidden');
 });
 

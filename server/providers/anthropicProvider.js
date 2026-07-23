@@ -99,10 +99,10 @@ async function listModels({ apiKey }) {
 }
 
 // 캐릭터 챗: 구조화 없이 일반 텍스트 응답
-async function generateChat({ apiKey, model, system, messages }) {
+async function generateChat({ apiKey, model, system, messages, maxTokens }) {
   const resp = await getClient(apiKey).messages.create({
     model: model || DEFAULT_MODEL,
-    max_tokens: 1024,
+    max_tokens: maxTokens || 1024,
     thinking: { type: 'disabled' },
     system: [{ type: 'text', text: system }],
     messages,

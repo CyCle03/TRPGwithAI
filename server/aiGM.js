@@ -258,13 +258,14 @@ function normalize(parsed) {
  * @param {Array}  messages [{role, content}]
  * @returns {Promise<string>}
  */
-async function chatReply(cfg, system, messages) {
+async function chatReply(cfg, system, messages, maxTokens) {
   return pickProvider(cfg.provider).generateChat({
     apiKey: cfg.apiKey,
     model: cfg.model,
     baseURL: cfg.baseURL,
     system,
     messages,
+    maxTokens,
   });
 }
 

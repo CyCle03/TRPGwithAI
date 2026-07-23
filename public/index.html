@@ -211,6 +211,13 @@
         <label>내 페르소나 <span class="opt">(선택)</span></label>
         <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
 
+        <label>권장 응답 길이 <span class="opt">(플레이어가 각자 바꿀 수 있어요)</span></label>
+        <select id="cpLength">
+          <option value="short">짧게 (2~3문장)</option>
+          <option value="medium">보통 (4~6문장)</option>
+          <option value="long">길게 (여러 문단)</option>
+        </select>
+
         <label>공개 설정</label>
         <div class="publish-row">
           <select id="cpVisibility">
@@ -308,6 +315,16 @@
         </div>
         <p class="hint" id="gmModelsHint"></p>
         <p class="hint" id="gmKeyHint"></p>
+
+        <div id="gmLengthRow" class="hidden">
+          <label>응답 길이 <span class="opt">(이 대화에만 적용)</span></label>
+          <select id="gmLength">
+            <option value="">제작자 권장 따르기</option>
+            <option value="short">짧게 (2~3문장)</option>
+            <option value="medium">보통 (4~6문장)</option>
+            <option value="long">길게 (여러 문단)</option>
+          </select>
+        </div>
         <div id="gameModelError" class="auth-error hidden"></div>
         <div class="wizard-nav">
           <button id="gmCancel" class="ghost">닫기</button>

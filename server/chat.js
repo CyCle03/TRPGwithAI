@@ -17,6 +17,46 @@ const MAX_IMAGES = 16;
 // JSON 스키마를 지원하지 않는 제공자(Ollama 등)에서도 동일하게 동작한다.
 const IMG_MARKER_RE = /\[img:\s*([^\]]{1,60})\]/i;
 
+/**
+ * 응답 길이(출력량). 제작자가 def.responseLength로 권장값을 정하고,
+ * 플레이어는 자기 대화에서 따로 덮어쓸 수 있다.
+ */
+const LENGTHS = ['short', 'medium', 'long'];
+const LENGTH_META = {
+  short: {
+    label: '짧게',
+    instruction: '응답은 2~3문장으로 짧고 간결하게. 군더더기 없이 핵심만.',
+    maxTokens: 320,
+  },
+  medium: {
+    label: '보통',
+    instruction: '응답은 4~6문장 정도로. 장면 묘사와 대사를 적절히 섞어라.',
+    maxTokens: 700,
+  },
+  long: {
+    label: '길게',
+    instruction:
+      '응답은 여러 문단으로 풍부하게. 장면과 분위기를 충분히 묘사하고 대사도 넉넉히 넣어라.',
+    maxTokens: 1500,
+  },
+};
+
+/** 유효한 길이값으로 정규화. */
+function normalizeLength(v, fallback = 'medium') {
+  return LENGTHS.includes(v) ? v : fallback;
+}
+
+/** 실제 적용할 길이 = 플레이어 설정이 있으면 그것, 없으면 제작자 권장값. */
+function effectiveLength(def, override) {
+  if (LENGTHS.includes(override)) return override;
+  return normalizeLength(def && def.responseLength);
+}
+
+/** 길이에 따른 최대 출력 토큰. */
+function maxTokensFor(level) {
+  return LENGTH_META[normalizeLength(level)].maxTokens;
+}
+
 /** 정의 입력 정규화(길이 제한). 최소 1명의 이름 있는 캐릭터가 필요. */
 function normalizeDef(raw) {
   const d = raw || {};
@@ -42,6 +82,7 @@ function normalizeDef(raw) {
     worldLore: String(d.worldLore || '').slice(0, 6000),
     characters,
     images,
+    responseLength: normalizeLength(d.responseLength), // 제작자 권장 출력량
     scenario: String(d.scenario || '').slice(0, 3000),
     greeting: String(d.greeting || '').slice(0, 2000),
     userPersona: String(d.userPersona || '').slice(0, 2000),
@@ -94,8 +135,11 @@ function displayName(def) {
   return c ? c.name : null;
 }
 
-/** def(사용자 정의)를 시스템 프롬프트 문자열로. 빈 필드는 생략. */
-function buildSystemPrompt(def) {
+/**
+ * def(사용자 정의)를 시스템 프롬프트 문자열로. 빈 필드는 생략.
+ * @param {string} [lengthOverride] 플레이어가 지정한 출력량(없으면 제작자 권장값)
+ */
+function buildSystemPrompt(def, lengthOverride) {
   const d = def || {};
   const chars = (d.characters || []).filter((c) => c.name);
   const multi = chars.length > 1;
@@ -136,8 +180,9 @@ function buildSystemPrompt(def) {
   }
 
   lines.push(
-    '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 응답은 대화가 이어지도록 적당한 길이로. 장면 묘사는 서술로, 대사는 따옴표로.'
+    '\n[규칙]\n- 사용자의 대사·행동을 존중하되, 사용자 캐릭터를 대신 말하거나 조종하지 마라.\n- 각 캐릭터의 성격에서 벗어나지 마라(OOC 금지).\n- 장면 묘사는 서술로, 대사는 따옴표로.'
   );
+  lines.push(`\n[응답 길이]\n${LENGTH_META[effectiveLength(d, lengthOverride)].instruction}`);
   return lines.join('\n');
 }
 
@@ -148,6 +193,11 @@ module.exports = {
   isConfigured,
   displayName,
   extractImage,
+  normalizeLength,
+  effectiveLength,
+  maxTokensFor,
+  LENGTHS,
+  LENGTH_META,
   MAX_CHAT_HISTORY,
   MAX_CHARACTERS,
   MAX_IMAGES,

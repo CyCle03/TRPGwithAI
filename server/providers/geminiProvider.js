@@ -118,11 +118,13 @@ async function listModels({ apiKey }) {
 }
 
 // 캐릭터 챗: 구조화 없이 일반 텍스트 응답
-async function generateChat({ apiKey, model, system, messages }) {
+async function generateChat({ apiKey, model, system, messages, maxTokens }) {
+  const config = { systemInstruction: system };
+  if (maxTokens) config.maxOutputTokens = maxTokens;
   const resp = await getClient(apiKey).models.generateContent({
     model: model || DEFAULT_MODEL,
     contents: toGeminiContents(messages),
-    config: { systemInstruction: system },
+    config,
   });
   const text = resp.text;
   if (!text) throw new Error('Gemini 응답이 비어 있습니다.');

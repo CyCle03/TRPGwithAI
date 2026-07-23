@@ -34,7 +34,7 @@ function toOpenAIMessages(system, messages) {
   ];
 }
 
-async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, jsonMode = true) {
+async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, jsonMode = true, maxTokens) {
   let res;
   try {
     const body = {
@@ -42,6 +42,7 @@ async function chat(baseURL, apiKey, model, defaultModel, systemText, messages, 
       messages: toOpenAIMessages(systemText, messages),
     };
     if (jsonMode) body.response_format = { type: 'json_object' };
+    if (maxTokens) body.max_tokens = maxTokens;
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -101,8 +102,8 @@ function makeProvider({ name, baseURL, defaultModel, dynamicBaseURL = false }) {
       }
     },
     // 캐릭터 챗: JSON 모드 없이 일반 텍스트
-    async generateChat({ apiKey, model, baseURL: cbu, system, messages }) {
-      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false);
+    async generateChat({ apiKey, model, baseURL: cbu, system, messages, maxTokens }) {
+      return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, false, maxTokens);
     },
     /** 사용 가능한 모델 목록 (OpenAI 호환 GET /models). 로컬(Ollama)은 키 없이도 가능. */
     async listModels({ apiKey, baseURL: cbu }) {

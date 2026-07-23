@@ -271,6 +271,7 @@ function loadUserChats(userId, user) {
         ai: c.ai || defaultAiFor(user),
         def: chat.migrateDef(c), // 구버전 persona 자동 변환
         messages: Array.isArray(c.messages) ? c.messages : [],
+        lengthOverride: c.lengthOverride || null, // 플레이어가 지정한 출력량
         publishedId: c.publishedId || null, // 내가 공개한 항목 id
         sourceId: c.sourceId || null, // 갤러리에서 가져온 원본
         sourceOwner: c.sourceOwner || null,
@@ -291,6 +292,7 @@ function persistChats(userId, uc) {
       ai: c.ai,
       def: c.def,
       messages: c.messages,
+      lengthOverride: c.lengthOverride || null,
       publishedId: c.publishedId || null,
       sourceId: c.sourceId || null,
       sourceOwner: c.sourceOwner || null,
@@ -321,6 +323,8 @@ function chatStatePayload(c, ownerId) {
     def: c.def || chat.normalizeDef({}),
     configured: chat.isConfigured(c.def),
     messages: c.messages || [],
+    responseLength: (c.def && c.def.responseLength) || 'medium', // 제작자 권장 출력량
+    lengthOverride: c.lengthOverride || null, // 플레이어 설정(null=권장 따름)
     published: entry ? { id: entry.id, visibility: entry.visibility, plays: entry.plays || 0 } : null,
     source: c.sourceId ? { id: c.sourceId, ownerName: c.sourceOwner } : null,
   };
@@ -656,6 +660,16 @@ io.on('connection', (socket) => {
     emit('chats', chatListPayload(uc));
   });
 
+  // 플레이어가 자기 대화의 출력량을 덮어쓴다(null이면 제작자 권장값 사용).
+  socket.on('setChatLength', (payload) => {
+    const c = activeChat();
+    if (!c) return;
+    const v = payload && payload.length;
+    c.lengthOverride = chat.LENGTHS.includes(v) ? v : null;
+    persistChats(userId, uc);
+    emit('chatState', chatStatePayload(c, userId));
+  });
+
   socket.on('chatSend', async (payload) => {
     const c = activeChat();
     if (!c) return emit('error', { message: '활성 챗이 없습니다.' });
@@ -676,12 +690,14 @@ io.on('connection', (socket) => {
     chatBusy = true;
     emit('chatThinking', { on: true });
     try {
-      const system = chat.buildSystemPrompt(c.def);
+      const len = chat.effectiveLength(c.def, c.lengthOverride);
+      const system = chat.buildSystemPrompt(c.def, len);
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const reply = await aiGM.chatReply(
         { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL },
         system,
-        recent
+        recent,
+        chat.maxTokensFor(len)
       );
       // [img:태그] 마커를 뽑아 이미지로 치환(본문에서는 제거)
       const { text: clean, imageId } = chat.extractImage(reply, c.def.images);
