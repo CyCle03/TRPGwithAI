@@ -702,6 +702,8 @@ io.on('connection', (socket) => {
   });
 });
 
+require('./seedGallery').seed(); // 갤러리 샘플 세계관 최초 1회 등록
+
 server.listen(PORT, () => {
   console.log(`\n🎲 AI GM 던전 월드 실행 중: http://localhost:${PORT}`);
   console.log(`   계정 기반 · 사용자별 API 키\n`);

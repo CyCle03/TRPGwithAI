@@ -134,4 +134,26 @@ function bumpPlays(pubId) {
   saveAll(db);
 }
 
-module.exports = { publish, unpublish, listPublic, listMine, get, bumpPlays, VISIBILITIES };
+/** 시딩 중복 방지 플래그 (한 번 등록 후 사용자가 지우면 다시 생기지 않음). */
+function hasSeed(key) {
+  const db = loadAll();
+  return !!(db.seeded && db.seeded[key]);
+}
+function markSeed(key) {
+  const db = loadAll();
+  db.seeded = db.seeded || {};
+  db.seeded[key] = new Date().toISOString();
+  saveAll(db);
+}
+
+module.exports = {
+  publish,
+  unpublish,
+  listPublic,
+  listMine,
+  get,
+  bumpPlays,
+  hasSeed,
+  markSeed,
+  VISIBILITIES,
+};
