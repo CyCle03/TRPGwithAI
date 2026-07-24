@@ -1606,3 +1606,63 @@ button.ghost.pulse {
     border-top: 1px solid var(--border);
   }
 }
+
+/* ---------- 운영자 접속 통계 ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.stat-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-card strong {
+  display: block;
+  font-size: 22px;
+  color: var(--accent);
+  line-height: 1.2;
+}
+.stat-card span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.stat-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 88px;
+  padding: 6px 4px 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.stat-bar {
+  flex: 1 1 0;
+  min-width: 14px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+}
+.stat-bar i {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  border-radius: 2px 2px 0 0;
+}
+.stat-bar span {
+  font-size: 10px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}

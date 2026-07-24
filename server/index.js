@@ -16,6 +16,7 @@ const chatStore = require('./chatStore');
 const chat = require('./chat');
 const uploads = require('./uploads');
 const publish = require('./publish');
+const metrics = require('./metrics');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
@@ -50,6 +51,24 @@ app.use((req, res, next) => {
       "object-src 'none'",
     ].join('; ')
   );
+  next();
+});
+
+/** 리버스 프록시(Caddy) 뒤이므로 실제 클라이언트는 X-Forwarded-For의 첫 항목. */
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return (req.socket && req.socket.remoteAddress) || '';
+}
+
+// 접속 통계 수집(운영자 패널용). 헬스체크는 감시 봇이 분당 호출하므로 제외한다.
+app.use((req, res, next) => {
+  if (req.path !== '/api/health') {
+    const isPage =
+      req.method === 'GET' &&
+      (req.path === '/' || String(req.headers.accept || '').includes('text/html'));
+    metrics.hit(clientIp(req), isPage);
+  }
   next();
 });
 
@@ -89,6 +108,7 @@ app.post('/api/signup', (req, res) => {
   try {
     const { username, password } = req.body || {};
     const user = auth.createUser(username, password);
+    metrics.recordSignup(user.id);
     setAuthCookie(res, auth.signToken(user.id));
     res.json({ user });
   } catch (e) {
@@ -100,6 +120,7 @@ app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
   const user = auth.verifyLogin(username, password);
   if (!user) return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+  metrics.recordLogin(user.id);
   setAuthCookie(res, auth.signToken(user.id));
   res.json({ user });
 });
@@ -296,6 +317,17 @@ async function withFreeGate(provider, userId, emit, fn) {
   }
 }
 
+// 통계용 데이터 폴더(사용자당 파일 1개 → 파일 수 = 이용자 수).
+const chatDirPath = path.join(__dirname, '..', 'data', 'chats');
+const sessionDirPath = path.join(__dirname, '..', 'data', 'sessions');
+function countFiles(dir) {
+  try {
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.json')).length;
+  } catch {
+    return 0; // 폴더가 아직 없으면 0
+  }
+}
+
 // 운영자 계정(신고 처리 권한). .env의 ADMIN_USER로 변경 가능.
 const ADMIN_USER = (process.env.ADMIN_USER || 'elcher').toLowerCase();
 function isAdmin(user) {
@@ -436,6 +468,7 @@ function gameState(slot) {
 io.on('connection', (socket) => {
   const userId = socket.userId;
   const user = auth.getUserById(userId);
+  metrics.recordActive(userId); // 오늘 실제로 접속한 사용자
   const ug = loadUserGames(userId, user);
   const emit = (event, payload) => socket.emit(event, payload);
   const active = () => ug.slots[ug.activeId];
@@ -451,18 +484,17 @@ io.on('connection', (socket) => {
     const provider = slot.ai.provider || 'gemini';
     const cfg = auth.getAiConfig(userId, provider);
     slot.game.setAiConfig({ provider, model: slot.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL });
-    if (provider === 'free') return true; // 서버 로컬 모델 — 사용자 키 불필요
+    // 'free'(서버 로컬 모델)는 사용자 키가 필요 없다.
     if (provider === 'custom') {
       if (!cfg.baseURL) {
         emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
         return false;
       }
-      return true;
-    }
-    if (!cfg.apiKey) {
+    } else if (provider !== 'free' && !cfg.apiKey) {
       emit('error', { message: `현재 게임의 제공자(${provider}) API 키가 없습니다. ⚙ 설정에서 등록하세요.` });
       return false;
     }
+    metrics.recordAi(provider, 'game');
     return true;
   }
 
@@ -817,6 +849,24 @@ io.on('connection', (socket) => {
     emit('adminReports', { items: publish.listReported() });
   });
 
+  // 운영자: 접속 통계
+  socket.on('adminStats', (payload) => {
+    if (!isAdmin(user)) return emit('error', { message: '권한이 없습니다.' });
+    const n = Math.min(Math.max(Number(payload && payload.days) || 14, 1), 90);
+    const all = publish.listAll();
+    emit('adminStats', {
+      ...metrics.summary(n),
+      totals: {
+        users: auth.countUsers(),
+        published: all.length,
+        publicEntries: all.filter((e) => e.visibility === 'public' && !e.blocked).length,
+        reported: publish.listReported().length,
+        chats: countFiles(chatDirPath),
+        games: countFiles(sessionDirPath),
+      },
+    });
+  });
+
   // 운영자: 차단 / 차단해제 / 삭제 / 신고기록 삭제
   socket.on('adminAction', (payload) => {
     if (!isAdmin(user)) return emit('error', { message: '권한이 없습니다.' });
@@ -910,6 +960,7 @@ io.on('connection', (socket) => {
     if (gate) return emit('error', { message: gate });
 
     c.messages.push({ role: 'user', content: text }); // 사용자 메시지는 클라가 즉시 렌더
+    metrics.recordAi(provider, 'chat');
     chatBusy = true;
     if (provider === 'free') {
       freeBusy = true;

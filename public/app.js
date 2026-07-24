@@ -154,6 +154,9 @@ const galleryBtn = document.getElementById('galleryBtn');
 const galleryListEl = document.getElementById('galleryList');
 const adminPanelEl = document.getElementById('adminPanel');
 const adminListEl = document.getElementById('adminList');
+const statTodayEl = document.getElementById('statToday');
+const statChartEl = document.getElementById('statChart');
+const statTotalsEl = document.getElementById('statTotals');
 let amAdmin = false;
 
 // 갤러리 정렬·태그 / 프로필 / 상세(댓글·추천)
@@ -331,6 +334,7 @@ function wireSocket() {
   socket.on('chatRollback', () => removeLastChatUserMsg());
   socket.on('reportDone', ({ count }) => alert(`신고가 접수되었습니다. (누적 ${count}건)`));
   socket.on('adminReports', ({ items }) => renderAdminReports(items));
+  socket.on('adminStats', (data) => renderAdminStats(data));
   socket.on('profile', (data) => renderProfile(data));
   socket.on('comments', ({ id, items, me }) => renderComments(id, items, me));
   socket.on('likeUpdated', ({ id, likes, liked }) => {
@@ -893,6 +897,59 @@ function renderComments(id, items, me) {
     }
     dtCommentsEl.appendChild(d);
   });
+}
+
+/** 운영자용 접속 통계 렌더(오늘 요약 + 최근 n일 막대). */
+function renderAdminStats(data) {
+  if (!statTodayEl || !data) return;
+  const t = data.today || {};
+
+  const cards = [
+    ['방문자', t.visitors, '오늘 다녀간 서로 다른 접속자'],
+    ['페이지 진입', t.pages, '홈 화면을 연 횟수'],
+    ['접속 사용자', t.users, '로그인 상태로 실제 이용한 사람'],
+    ['신규 가입', t.signups, '오늘 새로 만든 계정'],
+    ['챗 응답', t.chatMsgs, '캐릭터 챗 AI 호출'],
+    ['게임 진행', t.gameMsgs, 'AI GM 호출'],
+  ];
+  statTodayEl.innerHTML = '';
+  cards.forEach(([label, value, tip]) => {
+    const box = document.createElement('div');
+    box.className = 'stat-card';
+    box.title = tip;
+    const n = document.createElement('strong');
+    n.textContent = String(value || 0);
+    const l = document.createElement('span');
+    l.textContent = label;
+    box.append(n, l);
+    statTodayEl.appendChild(box);
+  });
+
+  // 최근 n일 방문자 막대 그래프
+  const days = Array.isArray(data.days) ? data.days : [];
+  const max = Math.max(1, ...days.map((d) => d.visitors || 0));
+  statChartEl.innerHTML = '';
+  days.forEach((d) => {
+    const col = document.createElement('div');
+    col.className = 'stat-bar';
+    col.title = `${d.day} · 방문자 ${d.visitors} · 진입 ${d.pages} · 사용자 ${d.users}`;
+    const fill = document.createElement('i');
+    fill.style.height = `${Math.round(((d.visitors || 0) / max) * 100)}%`;
+    const cap = document.createElement('span');
+    cap.textContent = d.day.slice(8); // 일자만
+    col.append(fill, cap);
+    statChartEl.appendChild(col);
+  });
+
+  const tot = data.totals || {};
+  const ai = Object.entries(t.ai || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${v}`)
+    .join(' · ');
+  statTotalsEl.textContent =
+    `누적 — 가입자 ${tot.users || 0}명 · 공개 작품 ${tot.publicEntries || 0}개(전체 ${tot.published || 0}) · ` +
+    `챗 이용자 ${tot.chats || 0}명 · 게임 이용자 ${tot.games || 0}명 · 신고 대기 ${tot.reported || 0}건` +
+    (ai ? ` / 오늘 모델별 호출 — ${ai}` : '');
 }
 
 /** 운영자용 신고 목록 렌더. */
@@ -1609,7 +1666,10 @@ cpAddCharBtn.addEventListener('click', () => {
 const cpGalleryBtn = document.getElementById('cpGallery');
 function openGallery() {
   requestGallery();
-  if (amAdmin) socket.emit('adminReports');
+  if (amAdmin) {
+    socket.emit('adminReports');
+    socket.emit('adminStats', { days: 14 });
+  }
 }
 function showProfile() {
   hideAllScreens();

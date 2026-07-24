@@ -170,6 +170,12 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
+/** 전체 가입자 수(운영자 통계용). */
+function countUsers() {
+  const db = loadUsers();
+  return Object.keys(db.users || {}).length;
+}
+
 /** 제공자별 암호화 키 맵을 반환(구버전 apiKeyEnc는 provider 키로 폴백). */
 function keysOf(s) {
   if (s.keys && typeof s.keys === 'object') return s.keys;
@@ -252,6 +258,7 @@ module.exports = {
   verifyLogin,
   findByUsername,
   getUserById,
+  countUsers,
   getAiConfig,
   updateSettings,
   signToken,
