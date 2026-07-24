@@ -54,8 +54,15 @@ app.use((req, res, next) => {
   next();
 });
 
-/** 리버스 프록시(Caddy) 뒤이므로 실제 클라이언트는 X-Forwarded-For의 첫 항목. */
+/**
+ * 실제 클라이언트 IP. 프록시 뒤에 있으므로 헤더를 봐야 한다.
+ * Cloudflare를 거치면 CF-Connecting-IP가 원본 주소이고(엣지에서 항상 덮어쓴다),
+ * 그렇지 않으면 Caddy가 넘긴 X-Forwarded-For의 첫 항목이 클라이언트다.
+ * 통계 용도로만 쓰므로 위조되어도 집계가 흐려질 뿐 권한과는 무관하다.
+ */
 function clientIp(req) {
+  const cf = req.headers['cf-connecting-ip'];
+  if (cf) return String(cf).trim();
   const xff = req.headers['x-forwarded-for'];
   if (xff) return String(xff).split(',')[0].trim();
   return (req.socket && req.socket.remoteAddress) || '';
