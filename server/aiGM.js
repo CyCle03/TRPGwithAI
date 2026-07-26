@@ -52,7 +52,10 @@ const KNOWN_MODELS = {
 const LOCAL_LLM_URL = String(process.env.LOCAL_LLM_URL || '').trim();
 // 기본값은 추론(thinking) 단계가 없는 모델. qwen3류는 사고에 토큰을 다 써서 CPU에선 부적합.
 const LOCAL_LLM_MODEL = process.env.LOCAL_LLM_MODEL || 'gemma3:4b';
-if (LOCAL_LLM_URL) {
+// FREE_TRIAL=off 면 로컬 LLM 설정이 남아 있어도 무료 체험을 닫는다(로컬 모델을 내려둔 기간 등).
+const FREE_ENABLED =
+  !!LOCAL_LLM_URL && String(process.env.FREE_TRIAL || '').trim().toLowerCase() !== 'off';
+if (FREE_ENABLED) {
   PROVIDERS.free = makeProvider({
     name: '무료 체험',
     baseURL: LOCAL_LLM_URL.replace(/\/+$/, ''),
@@ -64,7 +67,11 @@ if (LOCAL_LLM_URL) {
 }
 
 const PROVIDER_NAMES = Object.keys(PROVIDERS);
-const FREE_ENABLED = !!LOCAL_LLM_URL;
+
+/** 무료 체험이 닫힌 뒤, 예전에 무료 체험을 쓰던 사용자에게 보여줄 안내. */
+const FREE_OFF_MESSAGE =
+  '무료 체험(서버 AI)은 현재 중단되었습니다. ⚙ 설정에서 다른 AI 제공자를 고르고 API 키를 등록해주세요. ' +
+  '(Google Gemini는 카드 없이 무료 키를 받을 수 있어요: aistudio.google.com/apikey)';
 
 function pickProvider(name) {
   return PROVIDERS[name] || PROVIDERS.gemini;
@@ -350,4 +357,5 @@ module.exports = {
   PROVIDER_NAMES,
   KNOWN_MODELS,
   FREE_ENABLED,
+  FREE_OFF_MESSAGE,
 };

@@ -98,6 +98,24 @@ const gmModelsHintEl = document.getElementById('gmModelsHint');
 const gmFreeNoticeEl = document.getElementById('gmFreeNotice');
 const setFreeNoticeEl = document.getElementById('setFreeNotice');
 let freeLimitPerHour = 30;
+let freeAvailable = false; // 서버에 무료 체험(로컬 AI)이 열려 있는지
+let freeOffMessage =
+  '무료 체험(서버 AI)은 현재 중단되었습니다. ⚙ 설정에서 다른 AI 제공자를 고르고 API 키를 등록해주세요.';
+
+/** 예전에 무료 체험을 쓰던 사용자인데 지금은 무료 체험이 닫혀 있는 상태. */
+function freeTrialStale() {
+  return !freeAvailable && !!mySettings && mySettings.provider === 'free';
+}
+
+/** 무료 체험이 닫혔을 때 보여줄 안내 박스. */
+function freeOffHtml() {
+  return (
+    '<b>⚠️ 무료 체험이 중단되었습니다</b><br />' +
+    '서버의 로컬 AI를 내려서 지금은 무료 체험을 쓸 수 없어요. ' +
+    '아래에서 <b>다른 AI 제공자</b>를 고르고 <b>본인 API 키</b>를 등록하면 이어서 플레이할 수 있습니다.<br />' +
+    '<span class="fn-good">✅ Google Gemini는 카드 없이 무료 키를 받을 수 있어요 — aistudio.google.com/apikey</span>'
+  );
+}
 
 /** 무료 체험 모드 유의사항 문구. */
 function freeNoticeHtml() {
@@ -118,7 +136,7 @@ function toggleFreeNotice(el, provider) {
   if (!el) return;
   const on = provider === 'free';
   el.classList.toggle('hidden', !on);
-  if (on) el.innerHTML = freeNoticeHtml();
+  if (on) el.innerHTML = freeAvailable ? freeNoticeHtml() : freeOffHtml();
 }
 
 // 모드 토글 + 캐릭터 챗
@@ -243,11 +261,12 @@ function wireSocket() {
     knownModels = data.knownModels || knownModels;
     if (Array.isArray(data.providers)) providersList = data.providers;
     if (data.freeLimit) freeLimitPerHour = data.freeLimit;
+    if (data.freeOffMessage) freeOffMessage = data.freeOffMessage;
     // 서버에 로컬 AI가 설정된 경우에만 '무료 체험' 선택지를 노출
-    const freeOn = providersList.includes('free');
+    freeAvailable = providersList.includes('free');
     ['setFreeOpt', 'gmFreeOpt'].forEach((id) => {
       const o = document.getElementById(id);
-      if (o) o.hidden = !freeOn;
+      if (o) o.hidden = !freeAvailable;
     });
     if (data.username) userNameEl.textContent = data.username;
     amAdmin = !!data.isAdmin;
@@ -273,8 +292,8 @@ function wireSocket() {
       setMode('chat');
       socket.emit('playPublished', { id: playId });
     }
-    // 키가 하나도 없으면 설정을 먼저 열어 안내
-    if (!Object.keys(mySettings.keys).length) openSettings(true);
+    // 키가 하나도 없으면(또는 쓰던 무료 체험이 닫혔으면) 설정을 먼저 열어 안내
+    if (!Object.keys(mySettings.keys).length || freeTrialStale()) openSettings(true);
   });
 
   // 활성 게임의 전체 상태를 화면에 반영(init/슬롯 전환/새 게임/삭제 공용).
@@ -422,6 +441,7 @@ const KEY_URLS = {
 /** 활성 게임의 제공자에 키가 등록돼 있는지. custom은 baseURL 기준. */
 function providerReady(prov) {
   if (!mySettings) return false;
+  if (prov === 'free') return freeAvailable; // 무료 체험은 키 없이 서버가 열어둔 동안만
   if (prov === 'custom') return !!(mySettings.baseURL && mySettings.baseURL.trim());
   return !!(mySettings.keys && mySettings.keys[prov]);
 }
@@ -430,7 +450,8 @@ function updateModelNote() {
   const prov = currentGameAi.provider || 'gemini';
   const model = currentGameAi.model || defaultModels[prov] || '기본';
   const pname = PROVIDER_LABELS[prov] || prov;
-  modelNote.textContent = `${pname} · ${model}${providerReady(prov) ? '' : ' · ⚠ 키 미등록'}`;
+  const warn = providerReady(prov) ? '' : prov === 'free' ? ' · ⚠ 중단됨' : ' · ⚠ 키 미등록';
+  modelNote.textContent = `${pname} · ${model}${warn}`;
 }
 
 /** 로그 헤더의 🧠 버튼 라벨 = 현재 게임의 제공자·모델. */
@@ -1537,8 +1558,14 @@ function openModelModal(context) {
   modelModalContext = context;
   const ai = context === 'chat' ? currentChatAi : currentGameAi;
   gameModelErrorEl.classList.add('hidden');
-  gmProviderEl.value = ai.provider || 'gemini';
-  gmModelEl.value = ai.model || '';
+  // 무료 체험이 닫혔는데 예전 게임/챗이 'free'로 저장돼 있으면 고를 수 있는 값으로 바꿔 준다.
+  const staleFree = ai.provider === 'free' && !freeAvailable;
+  gmProviderEl.value = staleFree ? 'gemini' : ai.provider || 'gemini';
+  gmModelEl.value = staleFree ? '' : ai.model || '';
+  if (staleFree) {
+    gameModelErrorEl.textContent = freeOffMessage;
+    gameModelErrorEl.classList.remove('hidden');
+  }
   // 응답 길이는 챗에서만 (제작자 권장 + 내 설정)
   const isChat = context === 'chat';
   gmLengthRowEl.classList.toggle('hidden', !isChat);
@@ -1567,7 +1594,9 @@ function updateGameModelHint() {
   const pname = PROVIDER_LABELS[prov] || prov;
   gmKeyHintEl.innerHTML =
     prov === 'free'
-      ? '키가 필요 없습니다 — 서버의 로컬 AI로 바로 플레이합니다.'
+      ? freeAvailable
+        ? '키가 필요 없습니다 — 서버의 로컬 AI로 바로 플레이합니다.'
+        : `⚠ ${freeOffMessage}`
       : ready
         ? `${pname} 키 등록됨 ✓`
         : `⚠ ${pname} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요${prov === 'custom' ? '(커스텀은 엔드포인트 주소)' : ''}.`;
@@ -2171,15 +2200,20 @@ logoutBtn.addEventListener('click', async () => {
 // --- 설정 모달 ---
 function openSettings(firstTime) {
   settingsErrorEl.classList.add('hidden');
+  const stale = freeTrialStale();
   if (mySettings) {
-    setProviderEl.value = mySettings.provider || 'gemini';
-    setModelEl.value = mySettings.model || '';
+    // 무료 체험이 닫혔으면 고를 수 없는 값 대신 Gemini를 미리 선택해 둔다.
+    setProviderEl.value = stale ? 'gemini' : mySettings.provider || 'gemini';
+    setModelEl.value = stale ? '' : mySettings.model || '';
     setBaseUrlEl.value = mySettings.baseURL || '';
   }
   setKeyEl.value = '';
   updateSettingsHints();
   settingsModal.classList.remove('hidden');
-  if (firstTime) {
+  if (stale) {
+    settingsErrorEl.textContent = freeOffMessage;
+    settingsErrorEl.classList.remove('hidden');
+  } else if (firstTime) {
     settingsErrorEl.textContent = '먼저 AI API 키를 등록해야 게임을 시작할 수 있어요.';
     settingsErrorEl.classList.remove('hidden');
   }
@@ -2196,9 +2230,10 @@ function updateSettingsHints() {
   keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
   // 커스텀 제공자일 때만 엔드포인트 주소 입력란 표시
   baseUrlRowEl.classList.toggle('hidden', prov !== 'custom');
-  // 무료 체험은 키 입력이 필요 없음 + 유의사항 표시
-  setKeyEl.disabled = prov === 'free';
-  setKeyEl.placeholder = prov === 'free' ? '무료 체험은 키가 필요 없습니다' : '키를 붙여넣기 (변경할 때만 입력)';
+  // 무료 체험은 키 입력이 필요 없음 + 유의사항 표시 (닫혔으면 일반 제공자처럼 키 입력 허용)
+  const freeLive = prov === 'free' && freeAvailable;
+  setKeyEl.disabled = freeLive;
+  setKeyEl.placeholder = freeLive ? '무료 체험은 키가 필요 없습니다' : '키를 붙여넣기 (변경할 때만 입력)';
   toggleFreeNotice(setFreeNoticeEl, prov);
 }
 setProviderEl.addEventListener('change', updateSettingsHints);

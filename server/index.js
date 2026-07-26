@@ -147,6 +147,10 @@ app.post('/api/settings', (req, res) => {
   if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
     const { provider, model, apiKey, baseURL } = req.body || {};
+    // 무료 체험이 닫혀 있으면 새로 선택할 수 없다(예전 설정에서 빠져나오게).
+    if (provider === 'free' && !aiGM.FREE_ENABLED) {
+      return res.status(400).json({ error: aiGM.FREE_OFF_MESSAGE });
+    }
     const user = auth.updateSettings(uid, { provider, model, apiKey, baseURL });
     res.json({ user });
   } catch (e) {
@@ -491,6 +495,11 @@ io.on('connection', (socket) => {
     const provider = slot.ai.provider || 'gemini';
     const cfg = auth.getAiConfig(userId, provider);
     slot.game.setAiConfig({ provider, model: slot.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+    // 무료 체험이 닫힌 뒤에도 예전 설정이 'free'로 남아 있을 수 있다.
+    if (provider === 'free' && !aiGM.FREE_ENABLED) {
+      emit('error', { message: aiGM.FREE_OFF_MESSAGE });
+      return false;
+    }
     // 'free'(서버 로컬 모델)는 사용자 키가 필요 없다.
     if (provider === 'custom') {
       if (!cfg.baseURL) {
@@ -510,6 +519,7 @@ io.on('connection', (socket) => {
     settings: user ? user.settings : null,
     isAdmin: isAdmin(user),
     freeLimit: FREE_LIMIT_PER_HOUR,
+    freeOffMessage: aiGM.FREE_ENABLED ? null : aiGM.FREE_OFF_MESSAGE,
     providers: aiGM.PROVIDER_NAMES,
     defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
     knownModels: aiGM.KNOWN_MODELS, // 키 없이도 보여줄 추천 모델 후보
@@ -958,6 +968,7 @@ io.on('connection', (socket) => {
     const cfg = auth.getAiConfig(userId, provider);
     if (provider === 'free') {
       // 서버 로컬 모델 — 키 불필요, 대신 사용량 제한
+      if (!aiGM.FREE_ENABLED) return emit('error', { message: aiGM.FREE_OFF_MESSAGE });
     } else if (provider === 'custom') {
       if (!cfg.baseURL) return emit('error', { message: '커스텀 엔드포인트 주소가 없습니다. ⚙ 설정에서 입력하세요.' });
     } else if (!cfg.apiKey) {
