@@ -1,18 +1,27 @@
-# AI GM 솔로 던전 월드 (MVP)
+# AI GM 솔로 던전 월드
 
 AI가 GM(게임 마스터)을 맡는 1인용 던전 월드(PbtA) 웹 도구. 플레이어는 텍스트로 행동을 서술하고, AI GM이 상황을 묘사·전개하며, **주사위 판정과 수치 관리는 코드(규칙 엔진)가 담당**한다.
 
-자세한 설계 배경은 [BRIEF.md](BRIEF.md) 참고.
+여기에 규칙 없이 자유롭게 노는 **캐릭터 챗** 모드와, 만든 세계관을 남과 공유하는 **갤러리**가 붙어 있다.
+
+초기 설계 배경은 [BRIEF.md](BRIEF.md) 참고(1단계 MVP 시점의 문서라 현재 범위보다 좁다).
+
+## 두 가지 모드
+
+| 모드 | 내용 |
+|------|------|
+| **🎲 GM 모드** | 던전 월드 규칙으로 진행하는 솔로 TRPG. 8개 클래스, 2d6 판정, HP·인벤토리·경험치·레벨업 |
+| **💬 캐릭터 챗** | 규칙·주사위 없이 세계관과 캐릭터만 정의해 노는 롤플레이. 여러 캐릭터를 한 세계에 두면 내레이터가 전원을 연기한다 |
 
 ## 핵심 설계 — 역할 분리
 
 | 담당 | 책임 |
 |------|------|
 | **규칙 엔진 (코드)** | 2d6 주사위(서버 난수), 판정 구간(10+/7-9/6-), HP·인벤토리 등 상태의 단일 원천 |
-| **AI GM (Claude API)** | 장면 묘사·NPC 연출, 자유서술 → 무브 해석, 판정 결과 서사화 |
+| **AI GM (LLM)** | 장면 묘사·NPC 연출, 자유서술 → 무브 해석, 판정 결과 서사화 |
 
 핵심 루프: **AI가 무브 판단 → 코드가 2d6 굴림 → 결과를 다시 AI에 먹여 서사화** (2-패스).
-AI 응답은 [Structured Outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)(JSON 스키마 강제)로 `narration` + `action`으로 분리해 받아, 규칙 엔진이 안전하게 처리한다.
+AI 응답은 JSON 스키마를 강제해 `narration` + `action`으로 분리해 받고, 규칙 엔진이 `action`을 검증한 뒤에만 상태에 반영한다. LLM이 서사 안에서 지어낸 숫자는 상태가 되지 않는다.
 
 ## 실행 방법
 
@@ -20,60 +29,107 @@ AI 응답은 [Structured Outputs](https://platform.claude.com/docs/en/build-with
    ```bash
    npm install
    ```
-2. `.env` 파일에 API 키 입력 (`.env.example` 참고). 키는 **서버에서만** 사용되며 클라이언트에 노출되지 않는다. AI GM 두뇌는 두 가지 중 선택:
-
-   **A. Gemini (무료, 카드 불필요 — 기본값)**
-   - https://aistudio.google.com/apikey 에서 카드 없이 무료 키 발급
-   ```
-   AI_PROVIDER=gemini
-   GEMINI_API_KEY=발급받은-키
-   GEMINI_MODEL=gemini-2.5-flash   # 선택
-   ```
-
-   **B. Anthropic Claude (유료, 고품질)**
-   ```
-   AI_PROVIDER=anthropic
-   ANTHROPIC_API_KEY=sk-ant-...
-   ANTHROPIC_MODEL=claude-sonnet-5   # 선택. 고품질은 claude-opus-4-8
-   ```
+2. `.env` 설정 (`.env.example` 참고). **서버 .env에 AI 키를 둘 필요는 없다** — AI 제공자·모델·API 키는 앱 안에서 사용자별로 등록한다(⚙ 설정). `.env`에는 포트·시크릿 같은 서버 설정만 넣는다.
 3. 서버 실행:
    ```bash
    npm start
    ```
-4. 브라우저에서 http://localhost:3000 접속 → 캐릭터 생성 후 모험 시작.
+   개발 중에는 파일 변경 시 자동 재시작:
+   ```bash
+   npm run dev
+   ```
+4. 브라우저에서 http://localhost:3000 접속 → 회원가입 → ⚙ 설정에서 본인 API 키 등록 → 캐릭터 생성 후 모험 시작.
 
-> `.env`의 `AI_PROVIDER` 한 줄만 바꾸면 Gemini ↔ Claude를 오갈 수 있다. 규칙 엔진·UI·저장은 provider와 무관하게 동일하게 동작한다.
+## AI 제공자
+
+제공자·모델은 **사용자별**로 고르고, 게임/챗마다 따로 바꿀 수도 있다(🧠 버튼). 규칙 엔진·UI·저장은 제공자와 무관하게 동일하게 동작한다.
+
+| 제공자 | 키 발급 | 비고 |
+|--------|---------|------|
+| Google Gemini | aistudio.google.com/apikey | 카드 없이 무료 등급 사용 가능 (기본값) |
+| Anthropic Claude | console.anthropic.com/settings/keys | 유료(선불 크레딧) |
+| OpenAI | platform.openai.com/api-keys | 유료 |
+| DeepSeek | platform.deepseek.com/api_keys | 유료(저렴) |
+| xAI Grok | console.x.ai | 유료 |
+| Qwen | bailian.console.alibabacloud.com | 유료(신규 무료 크레딧) |
+| 커스텀 | — | OpenAI 호환 `/chat/completions` 엔드포인트(Ollama·LM Studio 등). 이 서버에서 접근 가능한 공개 주소여야 한다 |
+
+> **Gemini 무료 등급 주의** — 무료 등급은 주고받은 내용이 Google의 제품 개선에 쓰이고 사람이 검토할 수 있다. 민감한 정보는 넣지 않는 게 좋다(결제 수단을 연결한 유료 등급은 학습에 쓰이지 않는다).
+
+**무료 체험(서버가 키를 부담하는 모드)은 현재 닫혀 있다.** `LOCAL_LLM_URL`에 OpenAI 호환 엔드포인트를 넣으면 다시 열리고, 설정을 남겨둔 채 `FREE_TRIAL=off`로 임시로 닫을 수 있다. 열려 있는 동안에는 동시 1명 + 사용자별 시간당 횟수 제한이 걸린다.
+
+## 주요 기능
+
+**GM 모드**
+- 던전 월드 8개 클래스(전사·마법사·성직자·도적·레인저·음유시인·성기사·드루이드), 능력치 표준 배열 또는 직접 배분, 클래스별 장비 선택
+- 무브 판단 → 2d6 판정 → 결과 서사화, 무기 태그(정밀·간격·원거리 등)와 방어구 반영
+- HP·인벤토리(수량 스택)·코인·적/동료 패널 실시간 갱신, 경험치와 레벨업 선택
+- 게임 슬롯 여러 개를 오가며 진행, 서버 재시작 후에도 복구
+- 막혔을 때 쓰는 행동 제안
+
+**캐릭터 챗**
+- 세계관 + 여러 캐릭터 + 시나리오·첫 인사·유저 페르소나 정의
+- 화자별 이미지, 응답 길이 5단계(제작자 권장값 + 플레이어 개별 조정)
+- OpenAI 호환 제공자(OpenAI·DeepSeek·Grok·Qwen·커스텀)에서는 응답 스트리밍
+
+**공유·갤러리**
+- 만든 정의를 비공개 / 링크 공유 / 갤러리 공개 중 선택해 퍼블리시(대화 내용은 포함되지 않는다 — 플레이하는 사람은 각자 자기 대화를 갖는다)
+- 태그·정렬·좋아요·댓글·신고, 제작자 프로필
+- 운영자 패널: 신고 처리, 방문 통계
 
 ## 프로젝트 구조
 
 ```
 server/
-  index.js         Express + Socket.io 서버, 소켓 이벤트 라우팅
+  index.js         Express + Socket.io 서버, 소켓 이벤트 라우팅, 슬롯 매니저
   gameSession.js   핵심 루프 오케스트레이션 (무브 판단 → 굴림 → 서사화)
   rulesEngine.js   주사위·판정·상태 변경 (결정론적 규칙 엔진)
-  aiGM.js          프롬프트/스키마 구성 + provider 디스패치
+  dungeonWorld.js  8개 클래스 프리셋·장비·무브 요약·레벨업
+  aiGM.js          GM 프롬프트/스키마 구성 + provider 디스패치
+  chat.js          캐릭터 챗 시스템 프롬프트 구성 (규칙·주사위 없음)
+  auth.js          회원가입·로그인·세션 쿠키, API 키 암호화 저장
+  store.js         게임 슬롯 영속화      (data/sessions/<userId>.json)
+  chatStore.js     캐릭터 챗 영속화      (data/chats/<userId>.json)
+  publish.js       공개 정의 레지스트리·좋아요·댓글·신고 (data/published.json)
+  seedGallery.js   저장소에 포함된 샘플 세계관을 갤러리에 등록
+  uploads.js       이미지 업로드 저장/조회 (data/uploads/)
+  metrics.js       일자별 방문 통계 (IP는 HMAC 해시로만 저장)
   providers/
-    anthropicProvider.js  Claude 호출 (Structured Outputs)
     geminiProvider.js     Gemini 호출 (responseSchema)
-  dungeonWorld.js  클래스 프리셋(전사/마법사) + 무브 요약
-  store.js         세션 저장/이어하기 (JSON 파일, data/)
+    anthropicProvider.js  Claude 호출 (Structured Outputs)
+    openaiCompatProvider.js  OpenAI 호환 팩토리 (OpenAI·DeepSeek·Grok·Qwen·커스텀)
 public/
-  index.html       서사 로그 + 상태창 + 입력창 UI
+  index.html       전체 UI (홈·게임·챗·갤러리·설정 모달)
   style.css
   app.js           Socket.io 클라이언트, 렌더링
 ```
 
-## 현재 범위 (MVP)
+## 저장·보안
 
-- 캐릭터 생성 (이름 + 클래스 프리셋 1개: 전사/마법사)
-- AI GM과 자유 텍스트로 장면 진행
-- 무브 판단 → 2d6 판정 → 결과 서사화 (핵심 루프)
-- HP·인벤토리 상태창 실시간 표시·갱신
-- 세션 저장/이어하기 (단일 슬롯, 서버 재시작 후 복구)
+- 저장소는 `data/` 아래 JSON 파일. 별도 DB 없이 동작한다.
+- 비밀번호는 scrypt 해싱, 세션은 HMAC 서명 쿠키, **API 키는 AES-256-GCM으로 암호화**해 저장한다. 키는 서버에서만 복호화되며 클라이언트로 내려가지 않는다.
+- 암호화·서명에 쓰는 시크릿은 `APP_SECRET`. 미설정 시 서버가 자동 생성해 `data/.app_secret`에 보관한다(재배포 후에도 유지). **이 파일이 사라지면 저장된 API 키를 복호화할 수 없다.**
+- 방문 통계는 원본 IP를 저장하지 않는다(서버 salt로 HMAC 후 앞 12자만 보관).
+- 업로드 이미지는 추측 불가한 랜덤 id로 접근한다(capability URL) — id를 아는 사람은 볼 수 있다.
 
-## 이번엔 제외
+## 환경 변수
 
-멀티플레이·로그인, 전체 클래스/무브, 이미지·음성, 정교한 전투 자동화. 확장 로드맵은 BRIEF.md 참고.
+`.env.example`에 주석과 함께 정리되어 있다. 전부 선택 항목이다.
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `PORT` | 3000 | 서버 포트 |
+| `NODE_ENV` | — | `production`이면 인증 쿠키에 Secure 플래그 |
+| `APP_SECRET` | 자동 생성 | 세션 서명·API 키 암호화 시크릿 |
+| `ADMIN_USER` | `elcher` | 운영자 패널(신고 처리·통계) 권한을 가질 계정 아이디 |
+| `SAMPLE_OWNER` | `elcher` | 샘플 세계관을 넘겨줄 계정 아이디 |
+| `LOCAL_LLM_URL` | — | 설정 시 무료 체험 제공자를 연다 (OpenAI 호환 엔드포인트) |
+| `LOCAL_LLM_MODEL` | `gemma3:4b` | 무료 체험 모델 |
+| `LOCAL_LLM_TIMEOUT_MS` | 180000 | 무료 체험 응답 타임아웃 |
+| `LOCAL_LLM_STALL_MS` | 120000 | 스트리밍 첫 조각 대기 한도 |
+| `LOCAL_LLM_NO_THINK` | 1 | 0이면 no-think 지시 비활성 |
+| `FREE_TRIAL` | — | `off`면 위 설정을 남겨둔 채 무료 체험만 닫는다 |
+| `FREE_LIMIT_PER_HOUR` | 30 | 무료 체험 사용자별 시간당 호출 수 |
 
 ## 저작권
 
