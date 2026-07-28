@@ -18,9 +18,31 @@ const authToggleTextEl = document.getElementById('authToggleText');
 
 let authMode = 'login'; // 'login' | 'signup'
 
+const params = new URLSearchParams(location.search);
+
 // 예전에 뿌린 공유 링크는 "/?play=<id>" 형태다 → 챗 페이지로 넘겨준다.
-const playId = new URLSearchParams(location.search).get('play');
-const afterLogin = playId ? `/chat?play=${encodeURIComponent(playId)}` : '/';
+const playId = params.get('play');
+
+/**
+ * 로그인하지 않은 채 /play·/chat 을 열면 common.js 가 "/?next=<원래 경로>" 로 보낸다.
+ * 로그인이 끝나면 그 경로로 돌려보내되, 열린 리다이렉트가 되지 않게
+ * 같은 오리진의 아는 경로만 통과시킨다.
+ */
+function safeNext(raw) {
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(raw, location.origin);
+  } catch (_) {
+    return null; // 파싱 불가 → 무시
+  }
+  if (url.origin !== location.origin) return null; // "//evil.com" 류를 걸러낸다
+  if (url.pathname !== '/play' && url.pathname !== '/chat') return null;
+  return url.pathname + url.search;
+}
+
+const next = safeNext(params.get('next'));
+const afterLogin = playId ? `/chat?play=${encodeURIComponent(playId)}` : next || '/';
 
 function showAuth() {
   homeEl.classList.add('hidden');
@@ -90,7 +112,8 @@ App.start({
   },
   onReady: () => {
     // 공유 링크로 들어왔으면 바로 그 세계관을 여는 챗 페이지로.
-    if (playId) return location.replace(afterLogin);
+    // 로그인 전에 열려던 페이지가 있으면 거기로. (afterLogin 은 이때 '/' 가 아니다)
+    if (playId || next) return location.replace(afterLogin);
     showHome();
   },
 });

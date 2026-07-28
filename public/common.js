@@ -621,7 +621,10 @@
     if (!user) {
       // 로그인 화면은 랜딩에만 있다 — 나머지 페이지는 랜딩으로 보낸다.
       if (app === 'landing') return opts.onAnon && opts.onAnon();
-      location.replace('/');
+      // 로그인이 끝나면 원래 열려던 페이지로 돌아올 수 있게 목적지를 넘긴다.
+      // (외부에서 /play·/chat 으로 바로 들어온 방문자가 홈에서 한 번 더 고르지 않도록)
+      const back = encodeURIComponent(location.pathname + location.search);
+      location.replace(`/?next=${back}`);
       return;
     }
 
