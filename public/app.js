@@ -97,6 +97,7 @@ const gmTestModelBtn = document.getElementById('gmTestModel');
 const gmModelsHintEl = document.getElementById('gmModelsHint');
 const gmFreeNoticeEl = document.getElementById('gmFreeNotice');
 const setFreeNoticeEl = document.getElementById('setFreeNotice');
+const setKeyGuideEl = document.getElementById('setKeyGuide');
 let freeLimitPerHour = 30;
 let freeAvailable = false; // 서버에 무료 체험(로컬 AI)이 열려 있는지
 let freeOffMessage =
@@ -111,10 +112,43 @@ function freeTrialStale() {
 function freeOffHtml() {
   return (
     '<b>⚠️ 무료 체험이 중단되었습니다</b><br />' +
-    '서버의 로컬 AI를 내려서 지금은 무료 체험을 쓸 수 없어요. ' +
+    '무료 체험을 돌리던 서버 AI를 내려서 지금은 쓸 수 없어요. ' +
     '아래에서 <b>다른 AI 제공자</b>를 고르고 <b>본인 API 키</b>를 등록하면 이어서 플레이할 수 있습니다.<br />' +
-    '<span class="fn-good">✅ Google Gemini는 카드 없이 무료 키를 받을 수 있어요 — aistudio.google.com/apikey</span>'
+    '<span class="fn-good">✅ Google Gemini는 카드 없이 무료 키를 받을 수 있어요 — ' +
+    '<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></span>'
   );
+}
+
+/** 설정 모달의 키 발급 안내 박스. 키가 없을 때만 단계 안내를 붙인다. */
+function keyGuideHtml(prov, hasKey) {
+  if (prov === 'free' || prov === 'custom') return '';
+  const parts = [];
+  if (!hasKey && prov === 'gemini') {
+    parts.push(
+      '<b>🔑 Gemini 키 발급 — 1분이면 됩니다</b>' +
+        '<ul>' +
+        '<li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a> 접속 후 Google 계정으로 로그인</li>' +
+        '<li><b>「API 키 만들기」</b> 클릭 (결제 카드 등록 없이 발급됩니다)</li>' +
+        '<li>만들어진 키를 복사해 위 <b>API 키</b> 칸에 붙여넣고 저장</li>' +
+        '</ul>',
+    );
+  } else if (!hasKey) {
+    const k = KEY_URLS[prov];
+    if (k && k.href) {
+      parts.push(
+        `<b>🔑 키 발급</b><br />${keyUrlHtml(k)} 에서 키를 만들어 위 칸에 붙여넣고 저장하세요. (${k.note})`,
+      );
+    }
+  }
+  if (prov === 'gemini') {
+    // 무료 등급을 권하는 만큼 데이터 취급 차이는 알려야 한다(유료 등급은 학습에 쓰이지 않음).
+    parts.push(
+      '<span class="fn-warn">ℹ️ Google 무료 등급 키는 주고받은 내용이 Google의 제품 개선에 쓰이고 ' +
+        '사람이 검토할 수 있습니다. 민감한 개인정보는 입력하지 마세요. ' +
+        '(내 Google 계정에 결제 수단을 연결한 유료 등급 키는 학습에 쓰이지 않습니다.)</span>',
+    );
+  }
+  return parts.join('<br />');
 }
 
 /** 무료 체험 모드 유의사항 문구. */
@@ -427,16 +461,44 @@ const PROVIDER_LABELS = {
   custom: '커스텀',
   free: '무료 체험',
 };
+// href가 있으면 클릭 가능한 링크로 보여준다(없으면 그냥 텍스트).
 const KEY_URLS = {
-  gemini: { url: 'aistudio.google.com/apikey', note: '무료 키 발급 가능(카드 불필요)' },
-  anthropic: { url: 'console.anthropic.com/settings/keys', note: '유료(선불 크레딧)' },
-  openai: { url: 'platform.openai.com/api-keys', note: '유료' },
-  deepseek: { url: 'platform.deepseek.com/api_keys', note: '유료(저렴)' },
-  xai: { url: 'console.x.ai', note: '유료' },
-  qwen: { url: 'bailian.console.alibabacloud.com', note: '유료(신규 무료 크레딧 제공)' },
+  gemini: {
+    url: 'aistudio.google.com/apikey',
+    href: 'https://aistudio.google.com/apikey',
+    note: '무료 키 발급 가능(카드 불필요)',
+  },
+  anthropic: {
+    url: 'console.anthropic.com/settings/keys',
+    href: 'https://console.anthropic.com/settings/keys',
+    note: '유료(선불 크레딧)',
+  },
+  openai: {
+    url: 'platform.openai.com/api-keys',
+    href: 'https://platform.openai.com/api-keys',
+    note: '유료',
+  },
+  deepseek: {
+    url: 'platform.deepseek.com/api_keys',
+    href: 'https://platform.deepseek.com/api_keys',
+    note: '유료(저렴)',
+  },
+  xai: { url: 'console.x.ai', href: 'https://console.x.ai', note: '유료' },
+  qwen: {
+    url: 'bailian.console.alibabacloud.com',
+    href: 'https://bailian.console.alibabacloud.com',
+    note: '유료(신규 무료 크레딧 제공)',
+  },
   custom: { url: 'Ollama/LM Studio 등', note: '자체 호스팅은 키가 필요 없을 수 있음(비우면 됨)' },
   free: { url: '발급 불필요', note: '서버의 로컬 AI로 무료 체험 (느리고 사용량 제한 있음)' },
 };
+
+/** 키 발급처 표시 — href가 있으면 새 탭 링크. */
+function keyUrlHtml(k) {
+  return k.href
+    ? `<a href="${k.href}" target="_blank" rel="noopener noreferrer"><b>${k.url}</b></a>`
+    : `<b>${k.url}</b>`;
+}
 
 /** 활성 게임의 제공자에 키가 등록돼 있는지. custom은 baseURL 기준. */
 function providerReady(prov) {
@@ -2214,7 +2276,8 @@ function openSettings(firstTime) {
     settingsErrorEl.textContent = freeOffMessage;
     settingsErrorEl.classList.remove('hidden');
   } else if (firstTime) {
-    settingsErrorEl.textContent = '먼저 AI API 키를 등록해야 게임을 시작할 수 있어요.';
+    settingsErrorEl.textContent =
+      '먼저 AI API 키를 등록해야 게임을 시작할 수 있어요. 아래 안내를 따라 카드 없이 발급받을 수 있습니다.';
     settingsErrorEl.classList.remove('hidden');
   }
 }
@@ -2227,7 +2290,10 @@ function updateSettingsHints() {
   const hasKey = !!(mySettings && mySettings.keys && mySettings.keys[prov]);
   keyStatusEl.textContent = hasKey ? '(등록됨 — 바꿀 때만 입력)' : '(미등록)';
   const k = KEY_URLS[prov] || KEY_URLS.gemini;
-  keyHelpEl.innerHTML = `키 발급: <b>${k.url}</b> · ${k.note}`;
+  keyHelpEl.innerHTML = `키 발급: ${keyUrlHtml(k)} · ${k.note}`;
+  const guide = keyGuideHtml(prov, hasKey);
+  setKeyGuideEl.innerHTML = guide;
+  setKeyGuideEl.classList.toggle('hidden', !guide);
   // 커스텀 제공자일 때만 엔드포인트 주소 입력란 표시
   baseUrlRowEl.classList.toggle('hidden', prov !== 'custom');
   // 무료 체험은 키 입력이 필요 없음 + 유의사항 표시 (닫혔으면 일반 제공자처럼 키 입력 허용)

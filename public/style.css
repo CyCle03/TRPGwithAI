@@ -1486,6 +1486,12 @@ button.ghost.pulse {
 .free-notice .fn-good {
   color: var(--state);
 }
+.free-notice .fn-warn {
+  color: var(--dice);
+}
+.free-notice a {
+  color: var(--accent);
+}
 .model-actions {
   display: flex;
   gap: 8px;
