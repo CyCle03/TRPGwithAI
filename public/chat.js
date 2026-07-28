@@ -43,6 +43,7 @@ const cpLengthEl = document.getElementById('cpLength');
 const cpImagesEl = document.getElementById('cpImages');
 const cpImageFileEl = document.getElementById('cpImageFile');
 const cpAddImageBtn = document.getElementById('cpAddImage');
+const cpCoverHintEl = document.getElementById('cpCoverHint');
 
 // 갤러리 · 프로필 · 상세
 const galleryEl = document.getElementById('gallery');
@@ -90,6 +91,7 @@ let streamBubble = null; // 스트리밍 중인 말풍선 요소
 let streamText = ''; // 스트리밍 누적 텍스트
 let chatChars = [{ name: '', description: '' }]; // 설정 폼의 캐릭터 편집 상태
 let chatImages = []; // 설정 폼의 이미지 편집 상태 [{id, tag, description}]
+let chatCoverId = ''; // 제작자가 고른 대표 이미지 id. '' 이면 서버가 자동 선별한다.
 let pendingSetupAction = null; // 'save' | 'publish' | null — 설정 화면 이탈 여부 결정
 let cancelling = false; // 설정 안 된 새 대화를 취소하는 중
 let gallerySort = 'recent';
@@ -497,18 +499,41 @@ function renderImageEditors() {
     fields.appendChild(descIn);
     row.appendChild(fields);
 
+    // 갤러리 카드에 쓸 대표 이미지 지정(선택). 다시 누르면 해제하고 자동 선별로 돌아간다.
+    const cover = document.createElement('button');
+    cover.type = 'button';
+    const isCover = chatCoverId === im.id;
+    cover.className = 'cp-cover-btn' + (isCover ? ' on' : '');
+    cover.textContent = isCover ? '★ 대표' : '☆ 대표';
+    cover.title = isCover
+      ? '대표 이미지로 지정됨 — 다시 누르면 자동 선택으로 돌아갑니다'
+      : '갤러리 카드에 쓸 대표 이미지로 지정';
+    cover.addEventListener('click', () => {
+      chatCoverId = isCover ? '' : im.id;
+      renderImageEditors();
+    });
+    row.appendChild(cover);
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'cp-char-del';
     del.textContent = '✕';
     del.title = '이 이미지 빼기';
     del.addEventListener('click', () => {
+      // 대표로 지정한 걸 빼면 지정도 함께 해제한다(서버도 걸러내지만 폼 표시를 맞춘다)
+      if (chatCoverId === chatImages[i].id) chatCoverId = '';
       chatImages.splice(i, 1);
       renderImageEditors();
     });
     row.appendChild(del);
     cpImagesEl.appendChild(row);
   });
+  if (cpCoverHintEl) {
+    cpCoverHintEl.classList.toggle('hidden', !chatImages.length);
+    cpCoverHintEl.textContent = chatCoverId
+      ? '★ 표시한 이미지를 갤러리 카드에 씁니다.'
+      : '대표를 고르지 않으면 등록한 이미지 중 장면 컷을 골라 자동으로 씁니다.';
+  }
 }
 
 /** 파일을 data URL로 읽어 업로드하고 목록에 추가. */
@@ -547,6 +572,7 @@ function openChatSetupForm(data) {
     tag: im.tag || '',
     description: im.description || '',
   }));
+  chatCoverId = chatImages.some((im) => im.id === d.coverId) ? d.coverId : '';
   renderImageEditors();
   cpScenarioEl.value = d.scenario || '';
   cpGreetingEl.value = d.greeting || '';
@@ -569,6 +595,8 @@ function collectDef() {
     images: chatImages
       .map((im) => ({ id: im.id, tag: (im.tag || '').trim(), description: (im.description || '').trim() }))
       .filter((im) => im.id && im.tag),
+    // 대표 이미지. 태그가 비어 걸러진 이미지를 고른 경우까지 여기서 정리한다.
+    coverId: chatImages.some((im) => im.id === chatCoverId && (im.tag || '').trim()) ? chatCoverId : '',
     scenario: cpScenarioEl.value.trim(),
     greeting: cpGreetingEl.value.trim(),
     userPersona: cpUserPersonaEl.value.trim(),

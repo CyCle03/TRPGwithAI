@@ -92,6 +92,10 @@ function normalizeDef(raw) {
     }))
     .filter((im) => im.id && im.tag)
     .slice(0, MAX_IMAGES);
+  // 갤러리 카드에 쓸 대표 이미지(선택). 등록된 이미지 중 하나여야 한다 —
+  // 지웠거나 남의 이미지 id를 넣으면 버리고, 자동 선별에 맡긴다.
+  const coverIdRaw = String(d.coverId || '').replace(/[^a-f0-9]/gi, '').slice(0, 40);
+  const coverId = images.some((im) => im.id === coverIdRaw) ? coverIdRaw : '';
   // 장르·태그 (검색/분류용). 최대 6개, 각 20자.
   const tags = (Array.isArray(d.tags) ? d.tags : [])
     .map((t) => String(t || '').trim().replace(/^#/, '').slice(0, 20))
@@ -103,6 +107,7 @@ function normalizeDef(raw) {
     worldLore: String(d.worldLore || '').slice(0, 6000),
     characters,
     images,
+    coverId,
     tags,
     responseLength: normalizeLength(d.responseLength), // 제작자 권장 출력량
     scenario: String(d.scenario || '').slice(0, 3000),

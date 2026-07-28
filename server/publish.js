@@ -177,6 +177,36 @@ function listMine(ownerId) {
     .map(summarize);
 }
 
+/**
+ * 갤러리 카드에 쓸 대표 이미지를 고른다.
+ * 제작자가 지정한 것이 있으면 그것을 쓰고, 없으면 등록된 이미지에서 자동 선별한다.
+ *
+ * 자동 선별은 인물 컷보다 장면 컷을 앞세운다. 카드가 커지면서 이미지가 카드의
+ * 대부분을 차지하는데, 잘린 인물 얼굴보다 배경이 있는 장면이 작품 분위기를 훨씬
+ * 잘 전달한다. 인물 컷은 태그를 "루나-미소"처럼 등장인물 이름으로 시작하는
+ * 관례를 따르므로(설정 폼의 태그 예시가 그렇게 안내한다) 그걸로 판별한다.
+ * @returns {string|null} 이미지 id. 등록된 이미지가 없으면 null.
+ */
+function pickCover(def) {
+  const d = def || {};
+  const images = Array.isArray(d.images) ? d.images : [];
+  if (!images.length) return null;
+
+  const chosen = d.coverId && images.find((im) => im.id === d.coverId);
+  if (chosen) return chosen.id;
+
+  const names = (Array.isArray(d.characters) ? d.characters : [])
+    .map((c) => String((c && c.name) || '').trim())
+    .filter(Boolean);
+  const isPortrait = (im) => {
+    const tag = String(im.tag || '').trim();
+    return names.some((n) => tag === n || tag.startsWith(n + '-') || tag.startsWith(n + ' '));
+  };
+
+  const scene = images.find((im) => !isPortrait(im));
+  return (scene || images[0]).id;
+}
+
 /** 목록 표시용 요약(정의 전문은 제외, 대표 이미지 1장만). */
 function summarize(e) {
   const d = e.def || {};
@@ -191,7 +221,7 @@ function summarize(e) {
     characters: chars,
     characterCount: chars.length,
     imageCount: (d.images || []).length,
-    coverImageId: (d.images || [])[0] ? d.images[0].id : null,
+    coverImageId: pickCover(d),
     // 세계관·시나리오 본문은 노출하지 않는다(프롬프트 유출 방지). 등장인물 이름만 미리보기.
     tags: d.tags || [],
     likes: e.likes || 0,

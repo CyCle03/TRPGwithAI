@@ -2034,3 +2034,27 @@ body.app-chat .gi-play {
 body.app-chat .gallery-list {
   gap: 14px;
 }
+
+/* 대표 이미지 지정 토글 (설정 폼의 이미지 행) */
+.cp-cover-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cp-cover-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-2);
+}
+.cp-cover-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #211a0e;
+}
