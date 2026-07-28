@@ -99,10 +99,16 @@ server/
     anthropicProvider.js  Claude 호출 (Structured Outputs)
     openaiCompatProvider.js  OpenAI 호환 팩토리 (OpenAI·DeepSeek·Grok·Qwen·커스텀)
 public/
-  index.html       전체 UI (홈·게임·챗·갤러리·설정 모달)
-  style.css
-  app.js           Socket.io 클라이언트, 렌더링
+  common.js        세 페이지 공통 뼈대 — 사용자 바·⚙ 설정·🧠 모델 모달 주입, 계정 상태
+  index.html/.js   /      랜딩 — 로그인·회원가입 + 모드 선택 (소켓 없음)
+  play.html/.js    /play  던전 월드 — 캐릭터 생성 위저드 + 게임 화면
+  chat.html/.js    /chat  캐릭터 챗 — 설정 폼·대화·갤러리·프로필
+  style.css        세 페이지 공용 스타일
 ```
+
+세 페이지는 같은 서버·같은 출처에 있다. 계정·API 키·소켓 인증(쿠키)은 그대로 공유하고,
+화면과 스크립트만 갈라져 있다.
+
 
 ## 저장·보안
 

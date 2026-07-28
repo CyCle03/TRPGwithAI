@@ -142,6 +142,25 @@ app.get('/api/me', (req, res) => {
   res.json({ user: uid ? auth.getUserById(uid) : null });
 });
 
+/**
+ * 페이지 공통 설정 — 제공자 목록·기본/추천 모델·무료 체험 상태·운영자 여부.
+ * 소켓을 열지 않는 랜딩 페이지에서도 ⚙ 설정 모달이 동작해야 해서 REST로 뺐다.
+ */
+app.get('/api/config', (req, res) => {
+  const uid = userIdFromReq(req);
+  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  const user = auth.getUserById(uid);
+  res.json({
+    username: user ? user.username : null,
+    isAdmin: isAdmin(user),
+    freeLimit: FREE_LIMIT_PER_HOUR,
+    freeOffMessage: aiGM.FREE_ENABLED ? null : aiGM.FREE_OFF_MESSAGE,
+    providers: aiGM.PROVIDER_NAMES,
+    defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
+    knownModels: aiGM.KNOWN_MODELS, // 키 없이도 보여줄 추천 모델 후보
+  });
+});
+
 app.post('/api/settings', (req, res) => {
   const uid = userIdFromReq(req);
   if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
@@ -224,7 +243,18 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// ---------- 페이지 ----------
+// 같은 서버·같은 출처에 세 페이지를 둔다(쿠키·소켓 인증이 그대로 동작).
+//   /      랜딩 — 로그인/회원가입 + 모드 선택
+//   /play  AI GM 던전 월드
+//   /chat  캐릭터 챗 + 갤러리
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const page = (file) => (req, res) => res.sendFile(path.join(PUBLIC_DIR, file));
+app.get('/', page('index.html'));
+app.get('/play', page('play.html'));
+app.get('/chat', page('chat.html'));
+
+app.use(express.static(PUBLIC_DIR));
 
 // ---------- 소켓 인증 ----------
 io.use((socket, next) => {
@@ -514,23 +544,19 @@ io.on('connection', (socket) => {
     return true;
   }
 
-  socket.emit('init', {
-    username: user ? user.username : null,
-    settings: user ? user.settings : null,
-    isAdmin: isAdmin(user),
-    freeLimit: FREE_LIMIT_PER_HOUR,
-    freeOffMessage: aiGM.FREE_ENABLED ? null : aiGM.FREE_OFF_MESSAGE,
-    providers: aiGM.PROVIDER_NAMES,
-    defaultModels: Object.fromEntries(aiGM.PROVIDER_NAMES.map((n) => [n, aiGM.defaultModel(n)])),
-    knownModels: aiGM.KNOWN_MODELS, // 키 없이도 보여줄 추천 모델 후보
-    classes: listClasses(),
-    statKeys: STAT_KEYS,
-    standardArray: STANDARD_ARRAY,
-    ...gameState(active()),
-  });
-  emit('slots', slotList(ug));
-  if (activeGame().pendingLevelUp) emit('levelUp', activeGame().pendingLevelUp);
-  if (activeGame().dead) emit('gameOver', { reason: 'dead' });
+  // 챗 페이지는 게임 상태가 필요 없다 — 로그 전체를 보내지 않는다.
+  // (공통 설정은 /api/config가 이미 내려줬으므로 여기선 게임 데이터만 보낸다)
+  if (socket.handshake.query.app !== 'chat') {
+    socket.emit('init', {
+      classes: listClasses(),
+      statKeys: STAT_KEYS,
+      standardArray: STANDARD_ARRAY,
+      ...gameState(active()),
+    });
+    emit('slots', slotList(ug));
+    if (activeGame().pendingLevelUp) emit('levelUp', activeGame().pendingLevelUp);
+    if (activeGame().dead) emit('gameOver', { reason: 'dead' });
+  }
 
   socket.on('createCharacter', async (payload) => {
     const g = activeGame();
