@@ -43,13 +43,10 @@ const cpLengthEl = document.getElementById('cpLength');
 const cpImagesEl = document.getElementById('cpImages');
 const cpImageFileEl = document.getElementById('cpImageFile');
 const cpAddImageBtn = document.getElementById('cpAddImage');
-const cpGalleryBtn = document.getElementById('cpGallery');
 
 // 갤러리 · 프로필 · 상세
 const galleryEl = document.getElementById('gallery');
-const galleryBtn = document.getElementById('galleryBtn');
 const galleryListEl = document.getElementById('galleryList');
-const galleryCloseBtn = document.getElementById('galleryClose');
 const gallerySortEl = document.getElementById('gallerySort');
 const galleryTagsEl = document.getElementById('galleryTags');
 const adminPanelEl = document.getElementById('adminPanel');
@@ -61,8 +58,15 @@ const profileEl = document.getElementById('profile');
 const profileSubEl = document.getElementById('profileSub');
 const profileTotalsEl = document.getElementById('profileTotals');
 const profileListEl = document.getElementById('profileList');
-const profileCloseBtn = document.getElementById('profileClose');
-const profileGalleryBtn = document.getElementById('profileGallery');
+const profileSettingsBtn = document.getElementById('profileSettingsBtn');
+const profileLogoutBtn = document.getElementById('profileLogoutBtn');
+
+// 앱 셸 (하단 탭 · 내 대화 목록)
+const tabbarEl = document.getElementById('tabbar');
+const chatsEl = document.getElementById('chats');
+const chatsListEl = document.getElementById('chatsList');
+const chatsEmptyEl = document.getElementById('chatsEmpty');
+const chatBackBtn = document.getElementById('chatBackBtn');
 const detailModal = document.getElementById('detailModal');
 const dtTitleEl = document.getElementById('dtTitle');
 const dtMetaEl = document.getElementById('dtMeta');
@@ -92,6 +96,8 @@ let gallerySort = 'recent';
 let galleryTag = '';
 let detailItem = null;
 let pendingShowProfile = false; // ?view=profile 로 들어온 경우
+let lastChatList = { chats: [], activeId: null, max: 12 }; // '내 대화' 탭이 그릴 목록
+let bootHome = true; // 첫 chatState 는 대화로 튀지 않고 홈(둘러보기)에 머문다
 
 // 공유 링크(/chat?play=<id>)로 들어오면 해당 정의를 바로 가져와 플레이한다.
 const params = new URLSearchParams(location.search);
@@ -167,8 +173,8 @@ function wireSocket(s) {
     if (gallerySortEl) gallerySortEl.value = gallerySort;
     renderTagFilter(data.tags);
     renderGalleryList(galleryListEl, data.items, false);
-    if (!profileEl.classList.contains('hidden')) return; // 프로필 보는 중이면 화면 유지
-    showGallery();
+    // 목록 데이터가 도착했다고 화면을 뺏지 않는다. 화면 전환은 탭이 책임진다 —
+    // 추천(likeUpdated)처럼 다른 화면에서 갱신을 부르는 경로가 있기 때문이다.
   });
   s.on('error', ({ message }) => {
     App.stopThinking();
@@ -199,31 +205,46 @@ let bootScreenLock = false;
 document.addEventListener('click', () => (bootScreenLock = false), { capture: true, once: true });
 
 function hideAllScreens() {
-  [chatSetupEl, chatEl, galleryEl, profileEl].forEach((e) => e && e.classList.add('hidden'));
+  [chatSetupEl, chatEl, galleryEl, profileEl, chatsEl].forEach((e) => e && e.classList.add('hidden'));
 }
+
+/**
+ * 화면을 하나만 띄우고 앱 셸(탭바)을 그에 맞춘다.
+ * @param {HTMLElement} el 띄울 화면
+ * @param {'home'|'chats'|'create'|'profile'|null} tab 활성 탭. null 이면 대화 화면(탭바 숨김).
+ */
+function showScreen(el, tab) {
+  hideAllScreens();
+  el.classList.remove('hidden');
+  // 챗은 배경 영상을 쓰지 않는다 — 카드가 떠 보이는 원인이었다.
+  App.setLandingBg(false);
+  // 대화 중에는 탭바를 감춰 화면을 온전히 대화에 준다.
+  document.body.classList.toggle('chat-open', tab === null);
+  tabbarEl.classList.toggle('hidden', tab === null);
+  tabbarEl.querySelectorAll('.tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+}
+
 function showChatSetup() {
   if (bootScreenLock) return;
-  hideAllScreens();
-  chatSetupEl.classList.remove('hidden');
-  App.setLandingBg(true);
+  showScreen(chatSetupEl, 'create');
 }
 function showChat() {
   if (bootScreenLock) return;
-  hideAllScreens();
-  chatEl.classList.remove('hidden');
-  App.setLandingBg(false);
+  showScreen(chatEl, null);
 }
 function showGallery() {
-  hideAllScreens();
-  galleryEl.classList.remove('hidden');
-  App.setLandingBg(true);
+  showScreen(galleryEl, 'home');
 }
 function showProfile() {
-  hideAllScreens();
-  profileEl.classList.remove('hidden');
-  App.setLandingBg(true);
+  showScreen(profileEl, 'profile');
 }
-/** 현재 상태에 맞는 화면으로 돌아간다(갤러리·프로필 닫기 공용). */
+function showChats() {
+  renderChatsList();
+  showScreen(chatsEl, 'chats');
+}
+/** 대화 화면에서 뒤로 — 목록으로 돌아간다. */
 function backToChat() {
   if (currentChat && currentChat.configured) showChat();
   else if (currentChat) openChatSetupForm(currentChat);
@@ -294,23 +315,49 @@ function removeLastChatUserMsg() {
 }
 
 /** 챗 목록 칩 렌더. */
+/**
+ * 대화 목록 상태를 받아 두 곳에 반영한다.
+ * - 대화 화면 헤더: 지금 상대의 이름만 (칩 랙은 '내 대화' 탭으로 옮겼다)
+ * - '내 대화' 탭: 전체 목록
+ */
 function renderChatBar(data) {
-  if (!data || !chatBarEl) return;
-  chatBarEl.innerHTML = '';
-  (data.chats || []).forEach((c) => {
-    const chip = document.createElement('div');
-    chip.className = 'slot-chip' + (c.id === data.activeId ? ' active' : '');
+  if (!data) return;
+  lastChatList = { chats: data.chats || [], activeId: data.activeId, max: data.max || 12 };
+  if (chatBarEl) {
+    const active = lastChatList.chats.find((c) => c.id === lastChatList.activeId);
+    chatBarEl.textContent = active ? (active.configured ? active.name : '설정 안 된 캐릭터') : '';
+  }
+  renderChatsList();
+}
+
+/** '내 대화' 탭의 목록을 그린다. */
+function renderChatsList() {
+  if (!chatsListEl) return;
+  const { chats, activeId, max } = lastChatList;
+  chatsListEl.innerHTML = '';
+  chats.forEach((c) => {
+    const row = document.createElement('div');
+    row.className = 'chat-row' + (c.id === activeId ? ' active' : '');
+
     const btn = document.createElement('button');
-    btn.className = 'slot-main';
+    btn.type = 'button';
+    btn.className = 'cr-main';
     btn.textContent = c.configured ? c.name : '설정 안 된 캐릭터';
-    btn.title = '이 캐릭터로 전환';
     btn.addEventListener('click', () => {
-      if (c.id !== data.activeId) socket.emit('switchChat', { id: c.id });
+      if (c.id !== activeId) {
+        socket.emit('switchChat', { id: c.id }); // 전환 응답(chatState)이 대화를 연다
+      } else if (currentChat && currentChat.configured) {
+        showChat();
+      } else if (currentChat) {
+        openChatSetupForm(currentChat);
+      }
     });
-    chip.appendChild(btn);
-    if ((data.chats || []).length > 1) {
+    row.appendChild(btn);
+
+    if (chats.length > 1) {
       const del = document.createElement('button');
-      del.className = 'slot-del';
+      del.type = 'button';
+      del.className = 'cr-del';
       del.textContent = '✕';
       del.title = '이 캐릭터 삭제';
       del.addEventListener('click', (e) => {
@@ -319,13 +366,15 @@ function renderChatBar(data) {
           socket.emit('deleteChat', { id: c.id });
         }
       });
-      chip.appendChild(del);
+      row.appendChild(del);
     }
-    chatBarEl.appendChild(chip);
+    chatsListEl.appendChild(row);
   });
-  const full = (data.chats || []).length >= (data.max || 12);
+
+  if (chatsEmptyEl) chatsEmptyEl.classList.toggle('hidden', chats.length > 0);
+  const full = chats.length >= max;
   newChatBtn.disabled = full;
-  newChatBtn.title = full ? `캐릭터는 최대 ${data.max || 12}개까지 저장됩니다` : '새 캐릭터 만들기';
+  newChatBtn.textContent = full ? `캐릭터는 최대 ${max}개까지 저장돼요` : '＋ 새 캐릭터 만들기';
 }
 
 /** 활성 챗 상태를 반영. data가 null이면 챗 없음. */
@@ -336,14 +385,21 @@ function applyChatState(data) {
     updateChatModelLabel();
   }
   if (!data) {
-    // 마지막 남은 대화를 '취소'로 지웠다 → 홈으로
+    // 마지막 남은 대화를 '취소'로 지웠다 → 목록으로 (예전엔 사이트 루트로 튕겼다)
     if (cancelling) {
       cancelling = false;
-      location.href = '/';
+      showChats();
       return;
     }
     if (bootPlayId) return; // 공유 링크로 들어옴 — playPublished 응답을 기다린다
-    socket.emit('newChat'); // 대화가 하나도 없음 → 새로 만들어 설정 폼으로
+    // 대화가 없어도 새 대화를 자동 생성하지 않는다. 빈 설정 폼으로 시작하는 대신
+    // 둘러보기(홈)를 먼저 보여주고, 만들기는 탭에서 명시적으로 고르게 한다.
+    if (bootHome) {
+      bootHome = false;
+      if (!bootScreenLock) showGallery();
+    } else {
+      showChats();
+    }
     return;
   }
   bootPlayId = null;
@@ -362,6 +418,12 @@ function applyChatState(data) {
     setChatBusy(false);
     // 남이 만든 세계관은 설정을 수정할 수 없음 → 편집 버튼 숨김
     chatEditBtn.classList.toggle('hidden', !!data.readOnly);
+    // 첫 진입은 이어보던 대화로 튀지 않고 홈에 머문다 — 대화는 목록에서 고른다.
+    if (bootHome) {
+      bootHome = false;
+      if (!bootScreenLock) showGallery();
+      return;
+    }
     showChat();
     scrollChat();
   }
@@ -928,17 +990,41 @@ chatForm.addEventListener('submit', (e) => {
   socket.emit('chatSend', { text });
 });
 
-galleryBtn.addEventListener('click', openGallery);
-cpGalleryBtn.addEventListener('click', openGallery);
-galleryCloseBtn.addEventListener('click', backToChat);
 if (gallerySortEl) {
   gallerySortEl.addEventListener('change', () => {
     gallerySort = gallerySortEl.value;
     requestGallery();
   });
 }
-profileCloseBtn.addEventListener('click', backToChat);
-profileGalleryBtn.addEventListener('click', openGallery);
+
+// ---------- 앱 셸: 하단 탭 · 뒤로가기 · 프로필 안의 계정 행 ----------
+tabbarEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab');
+  if (!btn) return;
+  switch (btn.dataset.tab) {
+    case 'home':
+      openGallery();
+      showGallery();
+      break;
+    case 'chats':
+      showChats();
+      break;
+    case 'create':
+      // 설정 안 된 빈 대화가 이미 있으면 그걸 재사용한다(빈 껍데기 양산 방지)
+      if (currentChat && !currentChat.configured) openChatSetupForm(currentChat);
+      else if (!newChatBtn.disabled) socket.emit('newChat');
+      else showChats();
+      break;
+    case 'profile':
+      socket.emit('profileList');
+      showProfile();
+      break;
+  }
+});
+chatBackBtn.addEventListener('click', showChats);
+profileSettingsBtn.addEventListener('click', () => App.openSettings(false));
+// 로그아웃 로직은 common.js 가 갖고 있다 — 숨겨둔 원래 버튼을 그대로 누른다.
+profileLogoutBtn.addEventListener('click', () => document.getElementById('logoutBtn').click());
 
 dtCloseBtn.addEventListener('click', () => detailModal.classList.add('hidden'));
 dtLikeBtn.addEventListener('click', () => {
@@ -976,6 +1062,13 @@ App.start({
   },
   onReady: () => {
     if (adminPanelEl) adminPanelEl.classList.toggle('hidden', !App.isAdmin);
+    // 공유 링크·프로필 링크로 들어왔으면 목적지가 이미 정해져 있다 → 홈에 머물지 않는다.
+    if (bootPlayId || bootView) bootHome = false;
+    // 첫 화면은 둘러보기(홈). 챗 상태는 뒤따라와 목록만 채운다.
+    if (bootHome) {
+      showGallery();
+      openGallery();
+    }
     socket.emit('chatInit');
     // 공유 링크는 정의를 내 대화로 복사해 바로 플레이한다.
     if (bootPlayId) socket.emit('playPublished', { id: bootPlayId });

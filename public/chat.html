@@ -2,14 +2,79 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>캐릭터 챗 · AI GM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#14110f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>캐릭터 챗</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
-  <body>
+  <!-- app-chat: 챗 페이지 전용 앱 셸 스타일을 여는 스코프. play.html 은 영향받지 않는다. -->
+  <body class="app-chat">
     <!-- 배경 영상 · 사용자 바 · 설정/모델 모달은 common.js가 주입한다. -->
 
-    <!-- 캐릭터 챗: 세계관 + 다중 캐릭터 설정 화면 -->
+    <!-- ── 홈: 공개 갤러리 (챗의 기본 화면) ───────────────── -->
+    <div id="gallery" class="setup hidden">
+      <div class="setup-card wide">
+        <h1>🌐 둘러보기</h1>
+        <p class="subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
+
+        <div class="gallery-controls">
+          <select id="gallerySort">
+            <option value="recent">최신순</option>
+            <option value="likes">추천순</option>
+            <option value="plays">플레이순</option>
+          </select>
+          <div id="galleryTags" class="tag-filter"></div>
+        </div>
+
+        <div id="galleryList" class="gallery-list"></div>
+
+        <div id="adminPanel" class="hidden">
+          <label>📊 접속 통계 <span class="opt">(운영자 전용)</span></label>
+          <p class="hint">한국 시간 기준. 방문자는 IP를 되돌릴 수 없게 변환해 셉니다.</p>
+          <div class="stat-grid" id="statToday"></div>
+          <div class="stat-bars" id="statChart"></div>
+          <p class="hint" id="statTotals"></p>
+
+          <label>🛡 신고 관리 <span class="opt">(운영자 전용)</span></label>
+          <p class="hint">신고가 들어온 항목입니다. 확인 후 조치하세요.</p>
+          <div id="adminList" class="gallery-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 내 대화 목록 ──────────────────────────────────── -->
+    <div id="chats" class="setup hidden">
+      <div class="setup-card wide">
+        <h1>💬 내 대화</h1>
+        <p class="subtitle">저장한 캐릭터와 이어서 대화하세요.</p>
+        <div id="chatsList" class="chats-list"></div>
+        <p class="hint" id="chatsEmpty">아직 만든 캐릭터가 없어요. 둘러보기에서 마음에 드는 세계관을 플레이하거나, 직접 만들어 보세요.</p>
+        <button type="button" id="newChatBtn" class="primary block">＋ 새 캐릭터 만들기</button>
+      </div>
+    </div>
+
+    <!-- ── 대화 화면 (탭바 위로 올라오는 전체 화면) ──────────── -->
+    <div id="chat" class="chat-screen hidden">
+      <main class="log-pane">
+        <header class="log-header">
+          <button type="button" id="chatBackBtn" class="icon-btn" title="목록으로" aria-label="목록으로">←</button>
+          <div id="chatBar" class="chat-title"></div>
+          <div class="header-actions">
+            <button id="chatModelBtn" class="ghost" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
+            <button id="chatEditBtn" class="ghost" title="캐릭터 설정 편집">✎</button>
+          </div>
+        </header>
+        <div id="chatLog" class="log"><div id="chatLogInner" class="log-inner"></div></div>
+        <div id="chatThinking" class="thinking hidden">입력 중…</div>
+        <form id="chatForm" class="input-bar">
+          <input id="chatInput" type="text" placeholder="메시지를 입력하세요…" autocomplete="off" />
+          <button type="submit" class="primary" id="chatSendBtn">전송</button>
+        </form>
+      </main>
+    </div>
+
+    <!-- ── 만들기 / 편집: 세계관 + 다중 캐릭터 설정 ──────────── -->
     <div id="chatSetup" class="setup hidden">
       <div class="setup-card wide">
         <h1 id="chatSetupTitle">💬 캐릭터 · 세계관 만들기</h1>
@@ -67,86 +132,41 @@
         <p class="hint" id="cpPublishHint">공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.</p>
 
         <div id="chatSetupError" class="auth-error hidden"></div>
-        <div class="wizard-nav">
+        <div class="wizard-nav sticky-nav">
           <button id="cpCancel" class="ghost">취소</button>
-          <button id="cpGallery" class="ghost">🌐 갤러리</button>
           <button id="cpSave" class="primary">저장하고 대화 시작</button>
         </div>
       </div>
     </div>
 
-    <!-- 캐릭터 챗: 대화 화면 -->
-    <div id="chat" class="chat-screen hidden">
-      <main class="log-pane">
-        <header class="log-header">
-          <div id="chatBar" class="slot-bar"></div>
-          <div class="header-actions">
-            <button id="chatModelBtn" class="ghost" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
-            <button id="chatEditBtn" class="ghost" title="캐릭터 설정 편집">✎ 설정</button>
-            <button id="galleryBtn" class="ghost" title="공개 갤러리">🌐 갤러리</button>
-            <button id="newChatBtn" class="ghost" title="새 캐릭터 만들기">＋ 새 캐릭터</button>
-          </div>
-        </header>
-        <div id="chatLog" class="log"><div id="chatLogInner" class="log-inner"></div></div>
-        <div id="chatThinking" class="thinking hidden">입력 중…</div>
-        <form id="chatForm" class="input-bar">
-          <input id="chatInput" type="text" placeholder="메시지를 입력하세요…" autocomplete="off" />
-          <button type="submit" class="primary" id="chatSendBtn">전송</button>
-        </form>
-      </main>
-    </div>
-
-    <!-- 공개 갤러리 -->
-    <div id="gallery" class="setup hidden">
-      <div class="setup-card wide">
-        <h1>🌐 갤러리</h1>
-        <p class="subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
-
-        <div class="gallery-controls">
-          <select id="gallerySort">
-            <option value="recent">최신순</option>
-            <option value="likes">추천순</option>
-            <option value="plays">플레이순</option>
-          </select>
-          <div id="galleryTags" class="tag-filter"></div>
-        </div>
-
-        <div id="galleryList" class="gallery-list"></div>
-        <div id="adminPanel" class="hidden">
-          <label>📊 접속 통계 <span class="opt">(운영자 전용)</span></label>
-          <p class="hint">한국 시간 기준. 방문자는 IP를 되돌릴 수 없게 변환해 셉니다.</p>
-          <div class="stat-grid" id="statToday"></div>
-          <div class="stat-bars" id="statChart"></div>
-          <p class="hint" id="statTotals"></p>
-
-          <label>🛡 신고 관리 <span class="opt">(운영자 전용)</span></label>
-          <p class="hint">신고가 들어온 항목입니다. 확인 후 조치하세요.</p>
-          <div id="adminList" class="gallery-list"></div>
-        </div>
-        <div class="wizard-nav">
-          <button id="galleryClose" class="ghost">닫기</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 내 프로필 (내가 공개한 작품) -->
+    <!-- ── 프로필 ────────────────────────────────────────── -->
     <div id="profile" class="setup hidden">
       <div class="setup-card wide">
         <h1>👤 내 프로필</h1>
         <p class="subtitle" id="profileSub"></p>
         <div id="profileTotals" class="profile-totals"></div>
+
         <label>내가 공개한 작품</label>
         <div id="profileList" class="gallery-list"></div>
-        <div class="wizard-nav">
-          <button id="profileClose" class="ghost">닫기</button>
-          <button id="profileGallery" class="ghost">🌐 갤러리</button>
+
+        <label>다른 서비스</label>
+        <div class="link-rows">
+          <a class="link-row" href="/play"><span>🎲</span> AI GM 던전 월드로 이동</a>
+          <a class="link-row" href="/"><span>🏠</span> 서비스 선택 화면</a>
+        </div>
+
+        <label>계정</label>
+        <div class="link-rows">
+          <button type="button" id="profileSettingsBtn" class="link-row"><span>⚙</span> 설정 · API 키</button>
+          <button type="button" id="profileLogoutBtn" class="link-row danger"><span>↩</span> 로그아웃</button>
         </div>
       </div>
     </div>
 
-    <!-- 작품 상세 (태그 · 추천 · 댓글) -->
+    <!-- ── 작품 상세 (모바일에서는 바텀시트) ─────────────────── -->
     <div id="detailModal" class="modal-overlay hidden">
-      <div class="modal-card">
+      <div class="modal-card sheet">
+        <div class="sheet-grip" aria-hidden="true"></div>
         <h2 id="dtTitle">작품</h2>
         <p class="modal-sub" id="dtMeta"></p>
         <div id="dtTags" class="tag-row"></div>
@@ -165,6 +185,14 @@
         </div>
       </div>
     </div>
+
+    <!-- ── 하단 탭바 ─────────────────────────────────────── -->
+    <nav id="tabbar" class="tabbar hidden" aria-label="주요 화면">
+      <button type="button" class="tab" data-tab="home"><span class="ti">🌐</span>둘러보기</button>
+      <button type="button" class="tab" data-tab="chats"><span class="ti">💬</span>내 대화</button>
+      <button type="button" class="tab" data-tab="create"><span class="ti">＋</span>만들기</button>
+      <button type="button" class="tab" data-tab="profile"><span class="ti">👤</span>프로필</button>
+    </nav>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/common.js"></script>
