@@ -1992,3 +1992,45 @@ body.app-chat .modal-card.sheet {
     display: none;
   }
 }
+
+/* ---------- 갤러리 카드: 큰 커버 이미지의 세로형 카드 ----------
+   기존 카드는 72px 썸네일 + 한 줄 텍스트의 가로형이라 피드가 휑해 보였다.
+   마크업(img + .gi-body + 버튼들)은 그대로 두고 배치만 뒤집는다. */
+body.app-chat .gallery-card-item {
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+}
+body.app-chat .gallery-card-item img {
+  flex: 0 0 auto;
+  /* 카드 패딩을 음수 마진으로 되물려 이미지가 위쪽을 꽉 채우게 한다.
+     커버가 없는 항목은 이 규칙이 걸리지 않아 그대로 12px 패딩으로 시작한다. */
+  width: calc(100% + 24px);
+  height: auto;
+  aspect-ratio: 16 / 10;
+  margin: -12px -12px 6px;
+  border-radius: 14px 14px 0 0;
+}
+body.app-chat .gi-body {
+  flex: 1 1 100%;
+}
+body.app-chat .gi-title {
+  font-size: 1.08rem;
+  margin-bottom: 3px;
+}
+body.app-chat .gi-meta {
+  font-size: 0.78rem;
+  margin-bottom: 5px;
+}
+body.app-chat .gi-sum {
+  font-size: 0.86rem;
+}
+/* 버튼은 남은 폭을 고르게 나눠 한 줄에 */
+body.app-chat .gi-play {
+  flex: 1 1 0;
+  min-width: 0;
+}
+body.app-chat .gallery-list {
+  gap: 14px;
+}
