@@ -20,6 +20,10 @@ const metrics = require('./metrics');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
+// 리버스 프록시(Caddy)가 localhost 로 프록시하는 것을 전제로 루프백에만 바인딩한다.
+// 0.0.0.0 이면 공인 인터페이스에 그대로 붙어, 방화벽 규칙만이 유일한 방어선이 된다.
+// 컨테이너처럼 외부 인터페이스가 필요한 환경에서는 HOST=0.0.0.0 으로 덮어쓸 것.
+const HOST = process.env.HOST || '127.0.0.1';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const COOKIE = 'trpg_token';
 
@@ -1061,7 +1065,7 @@ io.on('connection', (socket) => {
 
 require('./seedGallery').seed(); // 갤러리 샘플 세계관 최초 1회 등록
 
-server.listen(PORT, () => {
-  console.log(`\n🎲 AI GM 던전 월드 실행 중: http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`\n🎲 AI GM 던전 월드 실행 중: http://${HOST}:${PORT}`);
   console.log(`   계정 기반 · 사용자별 API 키\n`);
 });
