@@ -38,7 +38,7 @@ AI 응답은 JSON 스키마를 강제해 `narration` + `action`으로 분리해 
    ```bash
    npm run dev
    ```
-4. 브라우저에서 http://localhost:3000 접속 → 회원가입 → ⚙ 설정에서 본인 API 키 등록 → 캐릭터 생성 후 모험 시작.
+4. 브라우저에서 http://localhost:3000 접속 → 회원가입(통합 인증으로 넘어간다) → ⚙ 설정에서 본인 API 키 등록 → 캐릭터 생성 후 모험 시작.
 
 > **UI 변경을 검증할 때** — 저장 경로가 `<repo>/data`로 고정돼 있어(`chatStore.js`·`auth.js`·`metrics.js`·`store.js`) 환경 변수로 갈라놓을 수 없다. 운영 데이터를 건드리지 않으려면 `server public package.json`을 임시 디렉터리에 복사하고 `node_modules`를 심볼릭 링크한 뒤, 빈 `data/`를 두고 `PORT=3999`로 따로 띄우면 된다.
 
@@ -92,7 +92,7 @@ server/
   dungeonWorld.js  8개 클래스 프리셋·장비·무브 요약·레벨업
   aiGM.js          GM 프롬프트/스키마 구성 + provider 디스패치
   chat.js          캐릭터 챗 시스템 프롬프트 구성 (규칙·주사위 없음)
-  auth.js          회원가입·로그인·세션 쿠키, API 키 암호화 저장
+  auth.js          통합 세션 쿠키 검증 + gm 프로필(제공자·모델·API 키 암호화 저장)
   store.js         게임 슬롯 영속화      (data/sessions/<userId>.json)
   chatStore.js     캐릭터 챗 영속화      (data/chats/<userId>.json)
   publish.js       공개 정의 레지스트리·좋아요·댓글·신고 (data/published.json)
@@ -123,17 +123,21 @@ public/
 ## 저장·보안
 
 - 저장소는 `data/` 아래 JSON 파일. 별도 DB 없이 동작한다.
-- 비밀번호는 scrypt 해싱, 세션은 HMAC 서명 쿠키, **API 키는 AES-256-GCM으로 암호화**해 저장한다. 키는 서버에서만 복호화되며 클라이언트로 내려가지 않는다.
+- **계정과 세션은 이 앱이 갖지 않는다.** 가입·로그인·로그아웃은 통합 인증(`auth.elcherlab.com`)이 소유하고, 여기서는 `.elcherlab.com` 도메인 쿠키를 공유 시크릿으로 **로컬 검증**만 한다(요청마다 인증 서버를 부르지 않으므로 인증이 잠깐 죽어도 기존 세션은 살아 있다). `data/users.json` 에 남는 것은 gm 전용 프로필(제공자·모델·API 키)뿐이고, 키는 통합 계정 uuid 다.
+- **API 키는 AES-256-GCM으로 암호화**해 저장한다. 키는 서버에서만 복호화되며 클라이언트로 내려가지 않는다. 암호화에는 `APP_SECRET` 을 계속 쓴다 — 암호문을 다른 서비스로 옮기면 복호화할 수 없으므로 통합 인증으로 넘기지 않았다.
 - 암호화·서명에 쓰는 시크릿은 `APP_SECRET`. 미설정 시 서버가 자동 생성해 `data/.app_secret`에 보관한다(재배포 후에도 유지). **이 파일이 사라지면 저장된 API 키를 복호화할 수 없다.**
 - 방문 통계는 원본 IP를 저장하지 않는다(서버 salt로 HMAC 후 앞 12자만 보관).
 - 업로드 이미지는 추측 불가한 랜덤 id로 접근한다(capability URL) — id를 아는 사람은 볼 수 있다.
 
 ## 환경 변수
 
-`.env.example`에 주석과 함께 정리되어 있다. 전부 선택 항목이다.
+`.env.example`에 주석과 함께 정리되어 있다. `AUTH_SECRET` 만 필수고 나머지는 선택이다.
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
+| `AUTH_SECRET` | (필수) | 통합 인증의 세션 쿠키를 검증하는 공유 시크릿. 없으면 기동 거부 |
+| `AUTH_ORIGIN` | `https://auth.elcherlab.com` | 가입·로그인·로그아웃을 보낼 주소 |
+| `SESSION_COOKIE_NAME` | `elab_session` | 통합 세션 쿠키 이름 |
 | `PORT` | 3000 | 서버 포트 |
 | `HOST` | `127.0.0.1` | 바인딩 주소. 리버스 프록시 뒤를 전제로 루프백만 받는다. 컨테이너 등 외부 인터페이스가 필요하면 `0.0.0.0` |
 | `NODE_ENV` | — | `production`이면 인증 쿠키에 Secure 플래그 |

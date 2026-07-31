@@ -86,7 +86,8 @@ async function submitAuth() {
   authSubmitEl.disabled = true;
   authErrorEl.classList.add('hidden');
   try {
-    await App.api(authMode === 'signup' ? '/api/signup' : '/api/login', { username, password });
+    // 가입·로그인은 통합 인증이 처리하고, 쿠키는 .elcherlab.com 으로 발급된다.
+    await App.authApi(authMode === 'signup' ? '/api/signup' : '/api/login', { username, password });
     authPassEl.value = '';
     location.href = afterLogin; // 새로 받은 쿠키로 다시 부트
   } catch (e) {

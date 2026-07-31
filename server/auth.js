@@ -5,23 +5,30 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * 인증 + 사용자 저장 + 비밀 암호화.
- * 추가 npm 의존성 없이 Node 내장 crypto만 사용한다 (ARM 배포 안전).
- * - 비밀번호: scrypt 해싱
- * - 세션: HMAC 서명 토큰(쿠키)
- * - API 키: AES-256-GCM 암호화 저장
+ * 계정 프로필 + 비밀 암호화.
+ *
+ * **신원은 이 앱이 갖지 않는다.** 아이디·비밀번호·세션은 통합 인증
+ * (auth.elcherlab.com)이 소유하고, 여기서는 `.elcherlab.com` 도메인 쿠키를
+ * 공유 시크릿(AUTH_SECRET)으로 **로컬 검증**만 한다. 네트워크 왕복이 없어
+ * 인증 서버가 잠깐 죽어도 기존 세션은 그대로 동작한다.
+ *
+ * 이 파일이 계속 들고 있는 것은 **gm 전용 프로필**이다 — 제공자·모델·
+ * 제공자별 API 키(AES-256-GCM). API 키는 APP_SECRET 으로 암호화돼 있고
+ * 그 암호문을 다른 서비스로 옮기지 않는다(옮기면 복호화할 수 없다).
+ *
+ * data/users.json 의 키는 통합 계정 uuid 다. 예전 gm 자체 uuid 에서
+ * 옮기는 일은 elcherlab-auth 의 scripts/rekeyGm.js 가 한 번 처리했다.
  */
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SECRET_FILE = path.join(DATA_DIR, '.app_secret');
-const TOKEN_MAX_AGE = 1000 * 60 * 60 * 24 * 30; // 30일
 
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// APP_SECRET: 환경변수 우선, 없으면 생성 후 파일에 저장(재시작해도 토큰/키 유지).
+// APP_SECRET: API 키 암호화 전용. 이 값이 바뀌면 저장된 키를 복호화할 수 없다.
 function loadSecret() {
   if (process.env.APP_SECRET) return process.env.APP_SECRET;
   ensureDir();
@@ -40,7 +47,15 @@ function loadSecret() {
 const SECRET = loadSecret();
 const ENC_KEY = crypto.createHash('sha256').update(SECRET).digest(); // 32 bytes
 
-// ---------- 사용자 저장 ----------
+// AUTH_SECRET: 통합 인증이 발급한 세션 쿠키를 검증하는 공유 시크릿.
+// 없으면 아무도 로그인할 수 없으므로 조용히 넘어가지 않고 즉시 멈춘다.
+const AUTH_SECRET = process.env.AUTH_SECRET;
+if (!AUTH_SECRET || AUTH_SECRET.length < 32) {
+  console.error('AUTH_SECRET 이 없거나 너무 짧습니다(32자 이상). 통합 인증과 같은 값을 .env 에 넣으세요.');
+  process.exit(1);
+}
+
+// ---------- 프로필 저장 ----------
 function loadUsers() {
   try {
     if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
@@ -55,23 +70,6 @@ function saveUsers(db) {
   const tmp = USERS_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, USERS_FILE);
-}
-
-// ---------- 비밀번호 (scrypt) ----------
-function hashPassword(pw) {
-  const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(pw, salt, 64);
-  return `${salt.toString('hex')}:${hash.toString('hex')}`;
-}
-
-function verifyPassword(pw, stored) {
-  try {
-    const [saltHex, hashHex] = stored.split(':');
-    const hash = crypto.scryptSync(pw, Buffer.from(saltHex, 'hex'), 64);
-    return crypto.timingSafeEqual(hash, Buffer.from(hashHex, 'hex'));
-  } catch (_) {
-    return false;
-  }
 }
 
 // ---------- API 키 암호화 (AES-256-GCM) ----------
@@ -95,68 +93,80 @@ function decrypt(enc) {
   }
 }
 
-// ---------- 세션 토큰 (HMAC) ----------
+// ---------- 통합 세션 쿠키 검증 ----------
+// elcherlab-auth 의 src/token.js 와 같은 형식이다. 의존성 없이 검증만 하면 되므로
+// 패키지로 빼지 않고 이 로직만 갖는다(형식이 바뀌면 양쪽을 함께 고쳐야 한다).
+function unb64url(s) {
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
 function b64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function hmac(data) {
-  return b64url(crypto.createHmac('sha256', SECRET).update(data).digest());
-}
 
-function signToken(userId) {
-  const payload = b64url(JSON.stringify({ uid: userId, iat: Date.now() }));
-  return `${payload}.${hmac(payload)}`;
-}
-
-function verifyToken(token) {
+/**
+ * 세션 쿠키를 검증한다.
+ * @returns {{uid:string, username:string}|null}
+ */
+function verifySession(token) {
   if (!token || typeof token !== 'string') return null;
-  const [payload, sig] = token.split('.');
-  if (!payload || !sig) return null;
-  const expected = hmac(payload);
-  if (sig.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const i = token.indexOf('.');
+  if (i < 1) return null;
+  const p = token.slice(0, i);
+  const mac = token.slice(i + 1);
+
+  const expected = b64url(crypto.createHmac('sha256', AUTH_SECRET).update(p).digest());
+  const a = Buffer.from(mac);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+
+  let payload;
   try {
-    const data = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
-    if (Date.now() - data.iat > TOKEN_MAX_AGE) return null;
-    return data.uid;
+    payload = JSON.parse(unb64url(p).toString('utf8'));
   } catch (_) {
     return null;
   }
+  if (!payload || typeof payload.exp !== 'number') return null;
+  if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+  if (!payload.uid) return null;
+  return { uid: String(payload.uid), username: String(payload.u || '') };
 }
 
-// ---------- 사용자 API ----------
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
-
-function createUser(username, password) {
-  username = String(username || '').trim();
-  if (!USERNAME_RE.test(username)) throw new Error('아이디는 영문/숫자/밑줄 3~20자여야 합니다.');
-  if (String(password || '').length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.');
-  const db = loadUsers();
-  const key = username.toLowerCase();
-  if (db.byName[key]) throw new Error('이미 사용 중인 아이디입니다.');
-  const id = crypto.randomUUID();
-  db.users[id] = {
-    id,
-    username,
-    passHash: hashPassword(password),
-    createdAt: new Date().toISOString(),
-    settings: { provider: 'gemini', model: '', baseURL: '', keys: {} },
-  };
-  db.byName[key] = id;
-  saveUsers(db);
-  return publicUser(db.users[id]);
+/** 기존 호출부 호환 — 사용자 id 만 필요할 때. */
+function verifyToken(token) {
+  const s = verifySession(token);
+  return s ? s.uid : null;
 }
 
-function verifyLogin(username, password) {
+// ---------- 프로필 API ----------
+
+/**
+ * 통합 계정에 대응하는 gm 프로필을 보장한다.
+ * 다른 서비스에서 먼저 가입한 사람이 gm 에 처음 들어오면 여기서 빈 프로필이 생긴다.
+ */
+function ensureUser(uid, username) {
   const db = loadUsers();
-  const id = db.byName[String(username || '').trim().toLowerCase()];
-  if (!id) return null;
-  const u = db.users[id];
-  if (!u || !verifyPassword(password, u.passHash)) return null;
+  let u = db.users[uid];
+  if (!u) {
+    u = {
+      id: uid,
+      username: username || uid.slice(0, 8),
+      createdAt: new Date().toISOString(),
+      settings: { provider: 'gemini', model: '', baseURL: '', keys: {} },
+    };
+    db.users[uid] = u;
+    db.byName[String(u.username).toLowerCase()] = uid;
+    saveUsers(db);
+  } else if (username && u.username !== username) {
+    // 통합 인증에서 아이디가 바뀐 경우 따라간다.
+    delete db.byName[String(u.username).toLowerCase()];
+    u.username = username;
+    db.byName[String(username).toLowerCase()] = uid;
+    saveUsers(db);
+  }
   return publicUser(u);
 }
 
-/** 아이디(사용자명)로 사용자 조회. 없으면 null. */
+/** 아이디(사용자명)로 조회. seedGallery 가 샘플 소유권을 넘길 때 쓴다. */
 function findByUsername(name) {
   const db = loadUsers();
   const id = db.byName[String(name || '').trim().toLowerCase()];
@@ -170,7 +180,7 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
-/** 전체 가입자 수(운영자 통계용). */
+/** gm 을 한 번이라도 쓴 사람 수(운영자 통계용). 전체 가입자 수가 아니다. */
 function countUsers() {
   const db = loadUsers();
   return Object.keys(db.users || {}).length;
@@ -185,8 +195,6 @@ function keysOf(s) {
 
 /**
  * AI 호출용: 특정 제공자의 복호화 키 + baseURL 반환 (내부 전용, 클라 노출 금지).
- * @param {string} id 사용자 id
- * @param {string} provider 게임이 선택한 제공자
  */
 function getAiConfig(id, provider) {
   const db = loadUsers();
@@ -236,7 +244,7 @@ function updateSettings(id, { provider, model, apiKey, baseURL }) {
   return publicUser(u);
 }
 
-/** 클라이언트에 안전하게 노출할 사용자 정보 (비밀번호·키 제외, 제공자별 키 존재 여부만). */
+/** 클라이언트에 안전하게 노출할 사용자 정보 (키 값 제외, 등록 여부만). */
 function publicUser(u) {
   const s = u.settings || {};
   const keys = keysOf(s);
@@ -244,23 +252,21 @@ function publicUser(u) {
     id: u.id,
     username: u.username,
     settings: {
-      provider: s.provider || 'gemini', // 새 게임 기본 제공자
-      model: s.model || '', // 새 게임 기본 모델
-      baseURL: s.baseURL || '', // 비밀 아님(엔드포인트 주소)
-      // 제공자별 키 등록 여부만(값은 절대 안 보냄). 예: {gemini:true, anthropic:false...}
+      provider: s.provider || 'gemini',
+      model: s.model || '',
+      baseURL: s.baseURL || '',
       keys: Object.fromEntries(Object.keys(keys).map((p) => [p, true])),
     },
   };
 }
 
 module.exports = {
-  createUser,
-  verifyLogin,
+  ensureUser,
   findByUsername,
   getUserById,
   countUsers,
   getAiConfig,
   updateSettings,
-  signToken,
+  verifySession,
   verifyToken,
 };

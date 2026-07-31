@@ -25,7 +25,10 @@ const PORT = process.env.PORT || 3000;
 // 컨테이너처럼 외부 인터페이스가 필요한 환경에서는 HOST=0.0.0.0 으로 덮어쓸 것.
 const HOST = process.env.HOST || '127.0.0.1';
 const IS_PROD = process.env.NODE_ENV === 'production';
-const COOKIE = 'trpg_token';
+// 통합 인증(auth.elcherlab.com)이 .elcherlab.com 도메인으로 발급하는 세션 쿠키.
+const COOKIE = process.env.SESSION_COOKIE_NAME || 'elab_session';
+// 클라이언트가 가입·로그인·로그아웃을 호출할 주소. /api/config 로 내려준다.
+const AUTH_ORIGIN = process.env.AUTH_ORIGIN || 'https://auth.elcherlab.com';
 
 const app = express();
 app.disable('x-powered-by'); // 서버 정보 노출 최소화
@@ -48,7 +51,9 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "media-src 'self'", // 랜딩 배경 영상(assets/intro.mp4)
-      "connect-src 'self'", // 같은 출처 WebSocket(Socket.io) 포함
+      // 같은 출처 WebSocket(Socket.io) 포함. 가입·로그인은 통합 인증으로
+      // 교차 출처 요청을 보내야 하므로 그 주소만 예외로 연다.
+      `connect-src 'self' ${AUTH_ORIGIN}`,
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'self'",
@@ -96,54 +101,35 @@ function parseCookies(header) {
   });
   return out;
 }
-function setAuthCookie(res, token) {
-  const parts = [
-    `${COOKIE}=${token}`,
-    'HttpOnly',
-    'Path=/',
-    'SameSite=Lax',
-    `Max-Age=${60 * 60 * 24 * 30}`,
-  ];
-  if (IS_PROD) parts.push('Secure');
-  res.setHeader('Set-Cookie', parts.join('; '));
-}
-function clearAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+/** 통합 인증이 발급한 세션 쿠키를 검증한다. → {uid, username} | null */
+function sessionFromReq(req) {
+  return auth.verifySession(parseCookies(req.headers.cookie)[COOKIE]);
 }
 function userIdFromReq(req) {
-  return auth.verifyToken(parseCookies(req.headers.cookie)[COOKIE]);
+  const s = sessionFromReq(req);
+  return s ? s.uid : null;
 }
 
-// ---------- 인증 API ----------
-app.post('/api/signup', (req, res) => {
-  try {
-    const { username, password } = req.body || {};
-    const user = auth.createUser(username, password);
-    metrics.recordSignup(user.id);
-    setAuthCookie(res, auth.signToken(user.id));
-    res.json({ user });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
+// ---------- 인증 ----------
+// 가입·로그인·로그아웃은 통합 인증(auth.elcherlab.com)이 소유한다.
+// 이 앱은 발급된 쿠키를 검증만 하므로 해당 라우트를 두지 않는다.
+// 클라이언트는 AUTH_ORIGIN 으로 직접 호출한다(/api/config 가 주소를 내려준다).
 
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body || {};
-  const user = auth.verifyLogin(username, password);
-  if (!user) return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
-  metrics.recordLogin(user.id);
-  setAuthCookie(res, auth.signToken(user.id));
-  res.json({ user });
-});
-
-app.post('/api/logout', (req, res) => {
-  clearAuthCookie(res);
-  res.json({ ok: true });
-});
+/**
+ * 로그인 폼이 요청을 보낼 주소. 비로그인 상태에서 필요하므로 공개한다
+ * (/api/config 는 로그인해야 열리는데, 로그인 전에 알아야 하는 값이다).
+ */
+app.get('/api/auth-origin', (_req, res) => res.json({ authOrigin: AUTH_ORIGIN }));
 
 app.get('/api/me', (req, res) => {
-  const uid = userIdFromReq(req);
-  res.json({ user: uid ? auth.getUserById(uid) : null });
+  const s = sessionFromReq(req);
+  if (!s) return res.json({ user: null });
+  // 다른 서비스에서 먼저 가입한 사람이 처음 들어오면 여기서 gm 프로필이 생긴다.
+  const before = auth.getUserById(s.uid);
+  const user = auth.ensureUser(s.uid, s.username);
+  if (!before) metrics.recordSignup(s.uid); // gm 기준 신규
+  metrics.recordLogin(s.uid);
+  res.json({ user });
 });
 
 /**
@@ -155,6 +141,7 @@ app.get('/api/config', (req, res) => {
   if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
   const user = auth.getUserById(uid);
   res.json({
+    authOrigin: AUTH_ORIGIN, // 로그인·로그아웃을 보낼 곳
     username: user ? user.username : null,
     isAdmin: isAdmin(user),
     freeLimit: FREE_LIMIT_PER_HOUR,

@@ -43,6 +43,37 @@
   }
   App.api = api;
 
+  /**
+   * 통합 인증(auth.elcherlab.com) 호출.
+   * 다른 출처라 credentials:'include' 가 있어야 쿠키를 주고받는다.
+   * 주소는 서버가 내려준다(/api/auth-origin) — 하드코딩하면 개발 환경에서 어긋난다.
+   */
+  let authOriginPromise = null;
+  async function authOrigin() {
+    if (!authOriginPromise) {
+      authOriginPromise = api('/api/auth-origin')
+        .then((d) => d.authOrigin)
+        .catch(() => {
+          authOriginPromise = null; // 실패는 캐시하지 않는다
+          throw new Error('인증 서버 주소를 가져오지 못했습니다.');
+        });
+    }
+    return authOriginPromise;
+  }
+  async function authApi(path, body) {
+    const origin = await authOrigin();
+    const res = await fetch(origin + path, {
+      method: body ? 'POST' : 'GET',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'include',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '요청 실패');
+    return data;
+  }
+  App.authApi = authApi;
+
   App.escapeHtml = function (s) {
     return String(s).replace(/[&<>"]/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])
@@ -378,7 +409,8 @@
   $('settingsBtn').addEventListener('click', () => openSettings(false));
   $('logoutBtn').addEventListener('click', async () => {
     try {
-      await api('/api/logout', {});
+      // 세션 쿠키는 .elcherlab.com 도메인이라 통합 인증이 지운다.
+      await authApi('/api/logout', {});
     } catch (_) {}
     if (App.socket) App.socket.disconnect();
     location.href = '/';
