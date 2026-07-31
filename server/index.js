@@ -47,13 +47,16 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self'",
+      // cloudflareinsights 예외는 Cloudflare Web Analytics 비콘용 — CF가 엣지에서
+      // HTML에 자동 주입한다. 없으면 비콘이 차단돼 분석이 안 잡히고 방문자 콘솔에
+      // 오류가 남는다(pc·pet 은 Caddy 쪽 CSP 에 같은 예외가 있다).
+      "script-src 'self' https://static.cloudflareinsights.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "media-src 'self'", // 랜딩 배경 영상(assets/intro.mp4)
       // 같은 출처 WebSocket(Socket.io) 포함. 가입·로그인은 통합 인증으로
       // 교차 출처 요청을 보내야 하므로 그 주소만 예외로 연다.
-      `connect-src 'self' ${AUTH_ORIGIN}`,
+      `connect-src 'self' ${AUTH_ORIGIN} https://cloudflareinsights.com`,
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'self'",
