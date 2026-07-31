@@ -251,6 +251,10 @@
 
   // ---------- 공용 마크업 주입 ----------
   const CHROME_HTML = `
+    <div id="legacyNotice" class="legacy-notice hidden">
+      <span class="ln-text"></span>
+      <button type="button" id="legacyNoticeClose" class="ln-close" aria-label="닫기">✕</button>
+    </div>
     <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto"></video>
     <div id="bgOverlay" class="bg-overlay"></div>
 
@@ -370,6 +374,33 @@
   const chrome = document.createElement('div');
   chrome.innerHTML = CHROME_HTML;
   while (chrome.firstChild) document.body.appendChild(chrome.firstChild);
+
+  /**
+   * 구 duckdns 주소 종료 안내.
+   * ai-gm.duckdns.org 는 현재 이 주소로 301 리다이렉트되지만 2026-08-07 에 끊는다.
+   * 그날이 지나면 스스로 사라지므로 따로 걷어낼 필요가 없다.
+   */
+  (function legacyNotice() {
+    const CUTOFF = Date.UTC(2026, 7, 7); // 2026-08-07 (월은 0부터)
+    const KEY = 'legacyDomainNoticeDismissed';
+    // $ 는 이 아래에서 const 로 선언돼 여기선 아직 못 쓴다(TDZ).
+    const el = document.getElementById('legacyNotice');
+    if (!el) return;
+    if (Date.now() >= CUTOFF) return; // 기한이 지나면 안내를 멈춘다
+    try {
+      if (localStorage.getItem(KEY) === '1') return;
+    } catch (_) {}
+    el.querySelector('.ln-text').textContent =
+      '옛 주소(ai-gm.duckdns.org)는 8월 7일부터 접속할 수 없습니다. ' +
+      '북마크를 gm.elcherlab.com 으로 바꿔주세요.';
+    el.classList.remove('hidden');
+    document.body.classList.add('has-legacy-notice');
+    document.getElementById('legacyNoticeClose').addEventListener('click', () => {
+      el.classList.add('hidden');
+      document.body.classList.remove('has-legacy-notice');
+      try { localStorage.setItem(KEY, '1'); } catch (_) {}
+    });
+  })();
 
   const $ = (id) => document.getElementById(id);
 

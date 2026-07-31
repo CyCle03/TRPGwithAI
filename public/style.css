@@ -2058,3 +2058,62 @@ body.app-chat .gallery-list {
   border-color: var(--accent);
   color: #211a0e;
 }
+
+/* ---------- 구 duckdns 주소 종료 안내 ----------
+   상단에 얇게 깔린다. 챗의 앱 셸은 상단바 높이를 --topbar-h 로 계산하므로
+   배너가 떠 있는 동안 그만큼 밀어준다(안 그러면 유저바와 겹친다). */
+.legacy-notice {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 8px) 14px 8px;
+  background: var(--accent-2);
+  color: #f6ecd9;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--accent);
+}
+.legacy-notice .ln-text {
+  flex: 1 1 auto;
+  word-break: keep-all;
+}
+.legacy-notice .ln-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid rgba(246, 236, 217, 0.35);
+  color: inherit;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.legacy-notice .ln-close:hover {
+  background: rgba(246, 236, 217, 0.15);
+}
+
+/* 배너가 있는 동안 고정 요소들을 아래로 민다 */
+body.has-legacy-notice .user-bar {
+  top: 42px;
+}
+body.app-chat.has-legacy-notice {
+  --topbar-h: calc(94px + env(safe-area-inset-top));
+}
+body.app-chat.has-legacy-notice .user-bar {
+  top: 42px;
+}
+body.app-chat.has-legacy-notice.chat-open .chat-screen {
+  padding-top: calc(42px + env(safe-area-inset-top));
+}
+
+@media (max-width: 560px) {
+  .legacy-notice {
+    font-size: 0.78rem;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
