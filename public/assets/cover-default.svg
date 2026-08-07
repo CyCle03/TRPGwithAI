@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="기본 커버 이미지">
+  <!--
+    커버 이미지를 등록하지 않은 갤러리 항목의 기본 커버.
+    실제 그림처럼 보이면 곤란하고(제작자가 넣은 것으로 오해), 깨진 것처럼 보여도 곤란해서
+    앱 팔레트만 쓴 추상적인 실루엣으로 그렸다. 텍스트는 넣지 않는다 — 제목이 바로 아래 붙는다.
+  -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#272220" />
+      <stop offset="55%" stop-color="#1e1a17" />
+      <stop offset="100%" stop-color="#14110f" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="42%">
+      <stop offset="0%" stop-color="#c9962e" stop-opacity="0.30" />
+      <stop offset="60%" stop-color="#7a4b2b" stop-opacity="0.10" />
+      <stop offset="100%" stop-color="#7a4b2b" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="ridgeFar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a322c" />
+      <stop offset="100%" stop-color="#2a2421" />
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#sky)" />
+  <rect width="1600" height="1000" fill="url(#glow)" />
+
+  <!-- 달 -->
+  <circle cx="800" cy="372" r="104" fill="#c9962e" opacity="0.22" />
+  <circle cx="800" cy="372" r="104" fill="none" stroke="#c9962e" stroke-opacity="0.42" stroke-width="3" />
+
+  <!-- 별 몇 점 -->
+  <g fill="#ece5da" opacity="0.30">
+    <circle cx="322" cy="196" r="3.5" />
+    <circle cx="498" cy="128" r="2.5" />
+    <circle cx="1152" cy="172" r="3" />
+    <circle cx="1328" cy="252" r="2.5" />
+    <circle cx="1044" cy="96" r="2" />
+    <circle cx="236" cy="330" r="2" />
+  </g>
+
+  <!-- 먼 능선 (각진 톱니로 보이지 않게 전부 곡선으로) -->
+  <path d="M0 704 C 176 648 302 566 462 606 C 622 646 716 528 902 578 C 1084 626 1204 548 1382 596
+           C 1478 622 1538 648 1600 634 L1600 1000 L0 1000 Z"
+        fill="url(#ridgeFar)" opacity="0.85" />
+  <!-- 가까운 능선 -->
+  <path d="M0 826 C 204 772 344 810 524 794 C 704 778 822 726 1004 770 C 1186 814 1324 784 1600 818
+           L1600 1000 L0 1000 Z"
+        fill="#1a1614" />
+  <!-- 바닥 -->
+  <path d="M0 910 C 302 882 622 916 942 892 C 1222 872 1422 902 1600 890 L1600 1000 L0 1000 Z"
+        fill="#14110f" />
+
+  <!-- 질감(아주 옅게) -->
+  <rect width="1600" height="1000" filter="url(#grain)" opacity="0.05" />
+</svg>

@@ -2005,7 +2005,8 @@ body.app-chat .gallery-card-item {
 body.app-chat .gallery-card-item img {
   flex: 0 0 auto;
   /* 카드 패딩을 음수 마진으로 되물려 이미지가 위쪽을 꽉 채우게 한다.
-     커버가 없는 항목은 이 규칙이 걸리지 않아 그대로 12px 패딩으로 시작한다. */
+     커버를 등록하지 않은 항목도 기본 커버(cover-default.svg)가 들어오므로
+     모든 카드가 같은 높이로 선다. */
   width: calc(100% + 24px);
   height: auto;
   aspect-ratio: 16 / 10;

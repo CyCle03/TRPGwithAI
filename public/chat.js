@@ -83,6 +83,8 @@ const dtCloseBtn = document.getElementById('dtClose');
 
 const GENRE_SUGGEST = ['판타지', '로맨스', '미스터리', '호러', 'SF', '학원', '무협', '일상', '느와르', '코미디'];
 const VIS_LABEL = { private: '🔒 비공개', link: '🔗 링크 공개', public: '🌐 전체 공개' };
+// 커버 이미지를 등록하지 않은 항목이 쓸 기본 커버.
+const DEFAULT_COVER = '/assets/cover-default.svg';
 
 let currentChat = null; // 활성 챗 상태 {chatId, def, configured, messages, ai, ...}
 let currentChatAi = { provider: 'gemini', model: '' };
@@ -657,13 +659,18 @@ function renderGalleryList(el, items, mine) {
   items.forEach((it) => {
     const card = document.createElement('div');
     card.className = 'gallery-card-item';
-    if (it.coverImageId) {
-      const img = document.createElement('img');
-      img.src = `/img/${it.coverImageId}`;
-      img.alt = it.title;
-      img.loading = 'lazy';
-      card.appendChild(img);
-    }
+    // 커버가 없어도 이미지 자리는 항상 채운다. 없을 때만 카드가 납작해지면
+    // 피드가 들쭉날쭉해 보여서(커버 있는 카드 581px, 없는 카드 135px) 기본 커버를 깐다.
+    const img = document.createElement('img');
+    img.src = it.coverImageId ? `/img/${it.coverImageId}` : DEFAULT_COVER;
+    img.alt = it.title;
+    img.loading = 'lazy';
+    // 등록된 이미지가 지워졌을 때도 빈 칸 대신 기본 커버로 떨어지게 한다.
+    img.addEventListener('error', () => {
+      if (img.src.endsWith(DEFAULT_COVER)) return;
+      img.src = DEFAULT_COVER;
+    });
+    card.appendChild(img);
     const body = document.createElement('div');
     body.className = 'gi-body';
     const meta = [
