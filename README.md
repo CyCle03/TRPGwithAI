@@ -96,13 +96,16 @@ server/
   store.js         게임 슬롯 영속화      (data/sessions/<userId>.json)
   chatStore.js     캐릭터 챗 영속화      (data/chats/<userId>.json)
   publish.js       공개 정의 레지스트리·좋아요·댓글·신고 (data/published.json)
-  seedGallery.js   저장소에 포함된 샘플 세계관을 갤러리에 등록
+  seedGallery.js   저장소에 포함된 샘플 세계관 7종을 갤러리에 등록 (장르별)
   uploads.js       이미지 업로드 저장/조회 (data/uploads/)
   metrics.js       일자별 방문 통계 (IP는 HMAC 해시로만 저장)
   providers/
     geminiProvider.js     Gemini 호출 (responseSchema)
     anthropicProvider.js  Claude 호출 (Structured Outputs)
     openaiCompatProvider.js  OpenAI 호환 팩토리 (OpenAI·DeepSeek·Grok·Qwen·커스텀)
+assets/sample/
+  *.png                샘플 세계관 이미지 (파일을 넣으면 다음 기동에 자동 등록)
+  IMAGE_PROMPTS.md     아직 안 그린 샘플 이미지 31장의 생성 프롬프트·파일명 규약
 public/
   common.js        세 페이지 공통 뼈대 — 사용자 바·⚙ 설정·🧠 모델 모달 주입, 계정 상태
   index.html/.js   /      랜딩 — 로그인·회원가입 + 모드 선택 (소켓 없음)

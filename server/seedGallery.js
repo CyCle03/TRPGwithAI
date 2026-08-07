@@ -131,14 +131,25 @@ const SAMPLE_DEF = {
 /**
  * 장르별 샘플 캐릭터챗. 첫 샘플(잿빛 항구)만으로는 "이 서비스로 뭘 할 수 있는지"가
  * 잘 전달되지 않아, 장르·인원수·응답 길이가 서로 다른 예시를 함께 깐다.
- * 이미지는 저작권 문제 없는 소스를 아직 못 구해 넣지 않았다(카드는 이미지 없이도 렌더된다).
  *
  * 각 항목은 자기 seed 키로 최초 1회만 등록된다 — 사용자가 지우면 다시 생기지 않는다.
  * 새 샘플을 추가할 때는 배열 끝에 새 key로 붙이면 된다(기존 key는 재사용하지 말 것).
+ *
+ * images 는 "아직 없는" 이미지까지 미리 선언해둔 매니페스트다. 그림은 나중에 그려
+ * 넣을 예정이라, assets/sample/ 에 파일이 생기는 순간 다음 기동에서 자동으로 붙는다
+ * (attachSampleImages 참고). 생성 프롬프트는 assets/sample/IMAGE_PROMPTS.md 에 있고
+ * 파일명·태그·설명은 그 문서와 일대일로 맞춰야 한다.
+ * 배열 첫 항목이 갤러리 카드 커버가 된다(pickCover 가 인물 컷을 뒤로 미루므로 장면 컷을 앞에).
  */
 const EXTRA_SAMPLES = [
   {
     key: 'sampleSchoolRomanceV1',
+    images: [
+      { id: '5a11e0ba51a01001', file: 'radio_roof.png', tag: '옥상', description: '방과 후 옥상 장면' },
+      { id: '5a11e0ba51a01002', file: 'radio_booth.png', tag: '방송실', description: '교내 방송실 실내' },
+      { id: '5a11e0ba51a01003', file: 'radio_sunset.png', tag: '노을', description: '해 질 무렵·감정이 고조되는 순간' },
+      { id: '5a11e0ba51a01004', file: 'radio_hayun.png', tag: '서하윤', description: '서하윤이 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '방과 후, 옥상의 라디오',
       worldLore: `사립 서하고등학교에는 점심시간마다 흐르는 교내 방송이 있다.
@@ -174,6 +185,14 @@ const EXTRA_SAMPLES = [
   },
   {
     key: 'sampleSciFiV1',
+    images: [
+      { id: '5a11e0ba51a02001', file: 'arche_bridge.png', tag: '함교', description: '조타실·함교 장면' },
+      { id: '5a11e0ba51a02002', file: 'arche_cryo.png', tag: '냉동 수면실', description: '수면 캡슐이 늘어선 구역' },
+      { id: '5a11e0ba51a02003', file: 'arche_cargo3.png', tag: '3번 화물칸', description: '금지된 화물칸에 들어설 때' },
+      { id: '5a11e0ba51a02004', file: 'arche_moth.png', tag: '모스', description: '모스가 대화의 중심일 때' },
+      { id: '5a11e0ba51a02005', file: 'arche_kyle.png', tag: '카일', description: '카일이 대화의 중심일 때' },
+      { id: '5a11e0ba51a02006', file: 'arche_nina.png', tag: '니나 박사', description: '니나 박사가 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '표류선 아르케 3호',
       worldLore: `화물선 아르케 3호는 목성 궤도를 벗어난 지점에서 항로를 이탈했다.
@@ -223,6 +242,14 @@ const EXTRA_SAMPLES = [
   },
   {
     key: 'sampleWuxiaV1',
+    images: [
+      { id: '5a11e0ba51a03001', file: 'inn_exterior.png', tag: '망월객잔', description: '객잔 외관·빗속에서 바라볼 때' },
+      { id: '5a11e0ba51a03002', file: 'inn_hall.png', tag: '객잔 대청', description: '객잔 안 탁자·손님들 장면' },
+      { id: '5a11e0ba51a03003', file: 'inn_swordrack.png', tag: '칼걸이', description: '문간 칼걸이·무기를 맡기거나 되찾을 때' },
+      { id: '5a11e0ba51a03004', file: 'inn_seorin.png', tag: '백서린', description: '백서린이 대화의 중심일 때' },
+      { id: '5a11e0ba51a03005', file: 'inn_gwak.png', tag: '곽 노인', description: '곽 노인이 대화의 중심일 때' },
+      { id: '5a11e0ba51a03006', file: 'inn_manbok.png', tag: '만복', description: '만복이 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '검을 묻은 객잔',
       worldLore: `정사대전이 끝난 지 십 년. 승자도 패자도 없이 이름난 고수들만 사라졌다.
@@ -271,6 +298,12 @@ const EXTRA_SAMPLES = [
   },
   {
     key: 'sampleSliceOfLifeV1',
+    images: [
+      { id: '5a11e0ba51a04001', file: 'book_shop.png', tag: '세 시 서점', description: '서점 실내 장면' },
+      { id: '5a11e0ba51a04002', file: 'book_window.png', tag: '빗물 창가', description: '창밖 비를 바라볼 때' },
+      { id: '5a11e0ba51a04003', file: 'book_dust.png', tag: '먼지', description: '고양이 먼지가 등장할 때' },
+      { id: '5a11e0ba51a04004', file: 'book_yuha.png', tag: '도유하', description: '도유하가 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '고양이 서점, 오후 세 시',
       worldLore: `골목 끝의 낡은 헌책방 '세 시 서점'. 간판은 빛이 바랬고, 문을 열면 종이 두 번 울린다.
@@ -294,7 +327,7 @@ const EXTRA_SAMPLES = [
 
 도유하: "어서 오세요. …아, 우산 없으셨구나. 잠깐만요."
 
-그가 카운터 아래에서 수건을 꺼내 건네고는, 묻지도 않고 주전자를 올린다.
+주인이 카운터 아래에서 수건을 꺼내 건네고는, 묻지도 않고 주전자를 올린다.
 
 도유하: "비 그칠 때까지 계셔도 돼요. 어차피 오늘은 손님이 두 분째라서요."`,
       userPersona:
@@ -305,6 +338,14 @@ const EXTRA_SAMPLES = [
   },
   {
     key: 'sampleNoirV1',
+    images: [
+      { id: '5a11e0ba51a05001', file: 'noir_street.png', tag: '비 내리는 거리', description: '거리·부두 야외 장면' },
+      { id: '5a11e0ba51a05002', file: 'noir_office.png', tag: '탐정 사무실', description: '한도진의 사무실 실내' },
+      { id: '5a11e0ba51a05003', file: 'noir_club.png', tag: '푸른 나비', description: '클럽 무대·실내 장면' },
+      { id: '5a11e0ba51a05004', file: 'noir_dojin.png', tag: '한도진', description: '한도진이 대화의 중심일 때' },
+      { id: '5a11e0ba51a05005', file: 'noir_rise.png', tag: '리세', description: '리세가 대화의 중심일 때' },
+      { id: '5a11e0ba51a05006', file: 'noir_manseok.png', tag: '오만석', description: '오만석이 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '비 내리는 도시, 마지막 담배',
       worldLore: `항구도시 해운정, 1938년. 부두를 새로 짓는다는 계획서 한 장에 도시의 절반이 걸려 있다.
@@ -355,6 +396,13 @@ const EXTRA_SAMPLES = [
   },
   {
     key: 'sampleFantasyComedyV1',
+    images: [
+      { id: '5a11e0ba51a06001', file: 'demon_hall.png', tag: '면접장', description: '면접장 실내 장면' },
+      { id: '5a11e0ba51a06002', file: 'demon_corridor.png', tag: '마왕성 복도', description: '복도·대기 공간' },
+      { id: '5a11e0ba51a06003', file: 'demon_belzer.png', tag: '벨제르', description: '벨제르가 대화의 중심일 때' },
+      { id: '5a11e0ba51a06004', file: 'demon_lilith.png', tag: '릴리스', description: '릴리스가 대화의 중심일 때' },
+      { id: '5a11e0ba51a06005', file: 'demon_gorg.png', tag: '고르그', description: '고르그가 대화의 중심일 때' },
+    ],
     def: {
       worldTitle: '마왕성 인사팀입니다',
       worldLore: `용사에게 세 번 연속으로 패한 뒤, 마왕성은 대대적인 구조조정에 들어갔다.
@@ -436,7 +484,65 @@ function seed() {
   refreshImageDescriptions(); // 태그 설명 정정(겹치는 설명이 오작동을 유발했음)
   ensureSampleTags(); // 첫 샘플에 장르 태그 back-fill
   ensureExtraSamples(); // 장르별 샘플 등록
+  attachSampleImages(); // 나중에 그려 넣은 이미지 파일을 샘플에 붙임
   transferSampleOwner(); // 실제 계정으로 소유권 이관
+}
+
+/**
+ * 장르별 샘플의 이미지를 붙인다. 그림이 아직 없는 상태로 샘플을 먼저 깔았기 때문에,
+ * assets/sample/ 에 파일이 생기면 그 다음 기동에서 자동으로 등록·연결되도록 한다.
+ * (그림 작업과 배포를 분리하려는 것 — 코드를 다시 고칠 필요가 없다.)
+ *
+ * 이미 붙인 이미지는 id별 seed 키로 기억한다. 그래야 사용자가 마음에 안 드는 컷을
+ * 지웠을 때 다음 기동에서 되살아나지 않는다.
+ */
+function attachSampleImages() {
+  const dir = path.join(__dirname, '..', 'assets', 'sample');
+  for (const s of EXTRA_SAMPLES) {
+    try {
+      const manifest = s.images || [];
+      if (!manifest.length) continue;
+      const entry = findEntryBySeedId(s.key);
+      if (!entry || !entry.def) continue;
+      const have = new Set((entry.def.images || []).map((im) => im.id));
+      // 파일이 실제로 있는 것만 uploads에 등록하고 붙인다(importFile은 없으면 null).
+      const add = manifest.filter(
+        (im) =>
+          !have.has(im.id) &&
+          !publish.hasSeed(imgSeedKey(im.id)) &&
+          uploads.importFile(path.join(dir, im.file), im.id, 'png')
+      );
+      if (!add.length) continue;
+      const def = chat.normalizeDef({
+        ...entry.def,
+        images: [
+          ...(entry.def.images || []),
+          ...add.map((im) => ({ id: im.id, tag: im.tag, description: im.description })),
+        ],
+      });
+      publish.publish({
+        pubId: entry.id,
+        ownerId: entry.ownerId,
+        ownerName: entry.ownerName,
+        def,
+        visibility: entry.visibility,
+        title: entry.title,
+      });
+      add.forEach((im) => publish.markSeed(imgSeedKey(im.id)));
+      console.log(`🖼️  '${entry.title}' 에 이미지 ${add.length}장을 붙였습니다(총 ${def.images.length}장).`);
+    } catch (e) {
+      console.error('샘플 이미지 연결 실패:', s.key, e.message);
+    }
+  }
+}
+
+const imgSeedKey = (id) => `sampleImg:${id}`;
+
+/** 등록 때 기록해둔 id로 샘플 항목을 찾는다(소유권이 넘어간 뒤에도 동작). */
+function findEntryBySeedId(key) {
+  const id = publish.getSeed(key + ':id');
+  if (!id) return null;
+  return publish.listAll().find((x) => x.id === id) || null;
 }
 
 /**
