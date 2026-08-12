@@ -4,6 +4,14 @@ name: Deploy to server
 on:
   push:
     branches: [main]
+    # 문서만 고친 푸시로 서비스를 재시작하지 않는다.
+    # 재시작하면 진행 중인 게임·챗의 소켓이 끊기는데, .md 는 서빙되지도
+    # 런타임에 읽히지도 않아 얻는 게 없다. 게다가 아래 concurrency 가
+    # cancel-in-progress 라, 문서 푸시가 돌고 있던 진짜 배포를 취소해 버린다.
+    # 코드와 문서를 같이 담은 푸시는 그대로 배포되고, 문서만 담은 푸시는
+    # 다음 배포의 git reset --hard origin/main 때 함께 따라온다.
+    paths-ignore:
+      - '**.md'
   workflow_dispatch: {} # 수동 실행도 허용
 
 # 동시 배포 방지 (이전 실행 취소)
