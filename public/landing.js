@@ -15,6 +15,8 @@ const authSubmitEl = document.getElementById('authSubmit');
 const authSwitchEl = document.getElementById('authSwitch');
 const authSubtitleEl = document.getElementById('authSubtitle');
 const authToggleTextEl = document.getElementById('authToggleText');
+const authTermsEl = document.getElementById('authTerms');
+const authAgeEl = document.getElementById('authAge');
 
 let authMode = 'login'; // 'login' | 'signup'
 
@@ -59,6 +61,9 @@ function showHome() {
 function setAuthMode(mode) {
   authMode = mode;
   authErrorEl.classList.add('hidden');
+  // 만 14세 확인과 약관 동의는 가입할 때만 받는다.
+  authTermsEl.classList.toggle('hidden', mode !== 'signup');
+  authAgeEl.checked = false;
   if (mode === 'login') {
     authSubtitleEl.textContent = '로그인하고 모험을 시작하세요';
     authSubmitEl.textContent = '로그인';
@@ -83,11 +88,19 @@ async function submitAuth() {
   const username = authUserEl.value.trim();
   const password = authPassEl.value;
   if (!username || !password) return;
+  if (authMode === 'signup' && !authAgeEl.checked) {
+    authErrorEl.textContent = '만 14세 이상 확인과 약관 동의에 체크해 주세요.';
+    authErrorEl.classList.remove('hidden');
+    return;
+  }
   authSubmitEl.disabled = true;
   authErrorEl.classList.add('hidden');
   try {
     // 가입·로그인은 통합 인증이 처리하고, 쿠키는 .elcherlab.com 으로 발급된다.
-    await App.authApi(authMode === 'signup' ? '/api/signup' : '/api/login', { username, password });
+    await App.authApi(
+      authMode === 'signup' ? '/api/signup' : '/api/login',
+      authMode === 'signup' ? { username, password, ageConfirm: true } : { username, password }
+    );
     authPassEl.value = '';
     location.href = afterLogin; // 새로 받은 쿠키로 다시 부트
   } catch (e) {

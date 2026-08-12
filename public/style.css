@@ -138,6 +138,39 @@ select#setProvider {
 .auth-toggle a:hover {
   text-decoration: underline;
 }
+.auth-terms {
+  margin-top: 14px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.auth-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.auth-check input {
+  width: auto;
+  margin: 3px 0 0;
+  flex: none;
+  cursor: pointer;
+}
+.auth-terms a,
+.auth-legal a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.auth-terms a:hover,
+.auth-legal a:hover {
+  text-decoration: underline;
+}
+.auth-legal {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
 .user-bar {
   position: fixed;
   top: 12px;

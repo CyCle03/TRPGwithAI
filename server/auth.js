@@ -272,6 +272,28 @@ function updateSettings(id, { provider, model, apiKey, baseURL, xferConsent }) {
   return publicUser(u);
 }
 
+/**
+ * 통합 인증이 탈퇴 처리 중에 부르는 내부 호출의 신원 확인.
+ * 세션 서명 비밀값 자체를 헤더에 싣지 않으려고, 거기서 유도한 토큰을 쓴다.
+ */
+const INTERNAL_TOKEN = crypto.createHash('sha256').update(`${AUTH_SECRET}:internal-delete`).digest('hex');
+function verifyInternal(value) {
+  if (typeof value !== 'string' || value.length !== INTERNAL_TOKEN.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(value), Buffer.from(INTERNAL_TOKEN));
+}
+
+/**
+ * 계정(설정·암호화된 API 키)을 지운다. 탈퇴 처리 전용.
+ * 이미 없으면 false 를 돌려준다 — 재시도해도 실패하지 않아야 한다.
+ */
+function deleteUser(id) {
+  const db = loadUsers();
+  if (!db.users[id]) return false;
+  delete db.users[id];
+  saveUsers(db);
+  return true;
+}
+
 /** 클라이언트에 안전하게 노출할 사용자 정보 (키 값 제외, 등록 여부만). */
 function publicUser(u) {
   const s = u.settings || {};
@@ -298,6 +320,8 @@ module.exports = {
   getAiConfig,
   xferBlockMessage,
   updateSettings,
+  deleteUser,
+  verifyInternal,
   verifySession,
   verifyToken,
 };

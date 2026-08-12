@@ -16,6 +16,7 @@ const chatStore = require('./chatStore');
 const chat = require('./chat');
 const uploads = require('./uploads');
 const publish = require('./publish');
+const purge = require('./purge');
 const metrics = require('./metrics');
 const fs = require('fs');
 
@@ -168,6 +169,36 @@ app.post('/api/settings', (req, res) => {
     res.json({ user });
   } catch (e) {
     res.status(400).json({ error: e.message });
+  }
+});
+
+/**
+ * 통합 인증(auth.elcherlab.com)이 탈퇴 처리 중에 부르는 내부 엔드포인트.
+ * Caddy 가 이 호스트의 모든 경로를 프록시하므로 공개 주소로도 닿는다 —
+ * 공유 시크릿에서 유도한 토큰을 반드시 확인한다.
+ * 실패는 삼키지 않는다. auth 는 여기가 성공해야 계정을 지운다.
+ */
+app.post('/internal/delete-user', (req, res) => {
+  if (!auth.verifyInternal(req.headers['x-internal-auth'])) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const userId = req.body && req.body.userId;
+  if (typeof userId !== 'string' || !userId) return res.status(400).json({ error: 'userId 가 필요합니다.' });
+  try {
+    const removed = purge.purgeUser(userId, auth.deleteUser);
+    // 아직 열려 있는 소켓이 방금 지운 파일을 다시 쓰지 않도록 끊는다.
+    let closed = 0;
+    for (const s of io.sockets.sockets.values()) {
+      if (s.userId === userId) {
+        s.disconnect(true);
+        closed += 1;
+      }
+    }
+    console.log(`[delete-user] ${userId} → ${JSON.stringify(removed)} (소켓 ${closed}개 종료)`);
+    res.json({ ok: true, removed });
+  } catch (e) {
+    console.error('[delete-user]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

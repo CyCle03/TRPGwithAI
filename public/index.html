@@ -18,11 +18,27 @@
         <input id="authUser" type="text" placeholder="영문/숫자/밑줄 3~20자" maxlength="20" autocomplete="username" />
         <label>비밀번호</label>
         <input id="authPass" type="password" placeholder="6자 이상" autocomplete="current-password" />
+        <!-- 가입할 때만 보인다(landing.js 가 토글).
+             만 14세 미만은 법정대리인 동의 없이 가입시킬 수 없다(개인정보 보호법 제22조의2). -->
+        <div id="authTerms" class="auth-terms hidden">
+          <label class="auth-check">
+            <input id="authAge" type="checkbox" />
+            <span>만 14세 이상이며,
+              <a href="https://elcherlab.com/terms.html" target="_blank" rel="noopener">이용약관</a>과
+              <a href="https://elcherlab.com/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에
+              동의합니다.</span>
+          </label>
+        </div>
         <div id="authError" class="auth-error hidden"></div>
         <button id="authSubmit" class="primary">로그인</button>
         <p class="auth-toggle">
           <span id="authToggleText">계정이 없나요?</span>
           <a id="authSwitch" href="#">회원가입</a>
+        </p>
+        <p class="auth-legal">
+          <a href="https://elcherlab.com/terms.html" target="_blank" rel="noopener">이용약관</a>
+          · <a href="https://elcherlab.com/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
+          · <a href="https://auth.elcherlab.com/account" target="_blank" rel="noopener">내 계정</a>
         </p>
       </div>
     </div>
