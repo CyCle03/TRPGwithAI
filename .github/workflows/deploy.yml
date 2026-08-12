@@ -22,8 +22,50 @@ concurrency:
 jobs:
   deploy:
     # 이 저장소 전용 러너(label: trpg)에서만 실행 — 다른 러너와 격리
+    # 공개 저장소 + self-hosted 러너 조합이라, 포크에서 실행되어 남의 코드가
+    # 서버에서 돌지 않도록 저장소를 못박는다. (pull_request 트리거도 두지 않는다)
+    if: github.repository == 'CyCle03/TRPGwithAI'
     runs-on: [self-hosted, trpg]
     steps:
+      # 검사는 러너 작업공간에 따로 받아서 한다. 아래 배포 스텝은 실서버
+      # 디렉터리에서 git reset --hard 를 하므로, 거기서 검사하면 이미 나쁜
+      # 코드가 배포된 뒤가 된다. 여기서 걸리면 배포 스텝 자체가 돌지 않는다.
+      - name: 검사용 코드 가져오기
+        uses: actions/checkout@v4
+
+      # 브라우저로 나가는 코드에만 건다. server/ 의 console.log 는 정상적인
+      # 서버 로깅이라(journald 로 간다) 대상이 아니다.
+      - name: 개발 로그 검사 (브라우저 코드)
+        run: |
+          if grep -rn 'console\.log\|\bdebugger\b' public/ --include='*.js'; then
+            echo "브라우저로 나가는 코드에 console.log 또는 debugger 가 있습니다."
+            exit 1
+          fi
+          echo "개발 로그 없음"
+
+      # 인라인 스크립트가 들어오면 CSP(script-src 'self')에 막혀 조용히 죽는다.
+      - name: CSP 회귀 검사 (인라인 핸들러 금지)
+        run: |
+          if grep -nE ' on[a-z]+=' public/*.html; then
+            echo "인라인 이벤트 핸들러가 있습니다. addEventListener 를 쓰세요."
+            exit 1
+          fi
+          if grep -nE '<script[^>]*>[^<[:space:]]' public/*.html; then
+            echo "인라인 <script> 블록이 있습니다."
+            exit 1
+          fi
+          echo "인라인 스크립트 없음"
+
+      # **리소스 로드만** 본다. 이 앱에는 AI 키 발급 페이지로 보내는 <a href> 가
+      # 여럿 있는데 그건 외부 요청이 아니다 — 문자열만 보면 그것까지 잡힌다.
+      - name: 외부 리소스 검사
+        run: |
+          if grep -rnoE '(src="|@import|url\()https?://' public/ --include='*.js' --include='*.html' --include='*.css'; then
+            echo "외부 리소스를 불러옵니다. 자체 호스팅으로 옮기세요."
+            exit 1
+          fi
+          echo "외부 리소스 없음"
+
       - name: Pull latest & restart service
         run: |
           set -e
