@@ -156,4 +156,73 @@ function purgeUser(userId, deleteAccount) {
   return removed;
 }
 
-module.exports = { purgeUser };
+/**
+ * 열람권(개인정보 보호법 제35조) — 이 서비스가 이 사용자에 대해 가진 것을 모아 준다.
+ *
+ * 등록된 AI API 키의 **값은 넣지 않는다.** 방침 3.1 에 "한 번 저장한 키는 어떤
+ * 경로로도 다시 내려받을 수 없다"고 적어 두었고, 세션이 탈취되면 그대로 키까지
+ * 새어 나가기 때문이다. 어느 제공자에 등록돼 있는지만 알려준다.
+ *
+ * @param {string} userId 통합 계정 uuid
+ * @param {object|null} account users.json 의 해당 항목(없으면 null)
+ */
+function exportUser(userId, account) {
+  const uid = safeName(userId);
+  const settings = (account && account.settings) || {};
+
+  const published = [];
+  const db = readJson(PUBLISHED, null);
+  if (db && db.entries) {
+    for (const [pubId, e] of Object.entries(db.entries)) {
+      if (!e) continue;
+      if (e.ownerId === userId) {
+        published.push({ 공개id: pubId, ...e });
+      } else if (Array.isArray(e.comments) && e.comments.some((c) => c && c.userId === userId)) {
+        // 남의 공개물에 남긴 내 댓글도 내 개인정보다.
+        published.push({
+          공개id: pubId,
+          남의항목: true,
+          제목: e.title || null,
+          내댓글: e.comments.filter((c) => c && c.userId === userId),
+          내추천: !!(e.likedBy && e.likedBy[userId]),
+        });
+      } else if (e.likedBy && e.likedBy[userId]) {
+        published.push({ 공개id: pubId, 남의항목: true, 제목: e.title || null, 내추천: true });
+      }
+    }
+  }
+
+  const chats = readJson(path.join(CHAT_DIR, `${uid}.json`), null);
+  const sessions = readJson(path.join(SESS_DIR, `${uid}.json`), null);
+
+  // 업로드한 이미지 — 파일 자체가 아니라 주소를 준다. 주소를 알면 볼 수 있다(capability URL).
+  const uploads = uploadIndex();
+  const mine = new Set();
+  for (const blob of [chats, sessions, published]) {
+    if (!blob) continue;
+    for (const id of idsReferencedIn(JSON.stringify(blob), uploads.keys())) mine.add(id);
+  }
+
+  return {
+    서비스: 'AI GM 던전 월드 · 캐릭터 챗 (gm.elcherlab.com)',
+    설정: {
+      선택한제공자: settings.provider || null,
+      모델: settings.model || null,
+      엔드포인트주소: settings.baseURL || null,
+      // 값이 아니라 어디에 등록돼 있는지만.
+      등록된API키: Object.keys(settings.keys || {}),
+      국외이전동의: settings.xferConsent
+        ? { 동의함: true, 동의시각: settings.xferConsentAt || null }
+        : { 동의함: false },
+    },
+    캐릭터챗: chats,
+    게임세션: sessions,
+    갤러리: published,
+    업로드이미지: [...mine].map((id) => `https://gm.elcherlab.com/img/${id}`),
+    참고:
+      'AI API 키의 값은 포함하지 않습니다. 한 번 저장한 키는 어떤 경로로도 다시 ' +
+      '내려받을 수 없도록 만들어져 있습니다(개인정보처리방침 3.1).',
+  };
+}
+
+module.exports = { purgeUser, exportUser };

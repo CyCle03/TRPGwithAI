@@ -308,6 +308,8 @@ function publicUser(u) {
       keys: Object.fromEntries(Object.keys(keys).map((p) => [p, true])),
       // 값이 아니라 "현재 방침 기준으로 동의가 유효한지"만 내보낸다.
       xferConsent: hasXferConsent(s),
+      // 동의한 시각은 본인의 기록이라 열람권(내 데이터 내려받기)에서 그대로 보여준다.
+      xferConsentAt: (s.xferConsent && s.xferConsent.at) || null,
     },
   };
 }

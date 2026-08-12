@@ -202,6 +202,21 @@ app.post('/internal/delete-user', (req, res) => {
   }
 });
 
+/** 열람권(제35조) — 통합 인증의 "내 데이터 내려받기"가 부른다. 같은 토큰으로 확인한다. */
+app.post('/internal/export-user', (req, res) => {
+  if (!auth.verifyInternal(req.headers['x-internal-auth'])) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const userId = req.body && req.body.userId;
+  if (typeof userId !== 'string' || !userId) return res.status(400).json({ error: 'userId 가 필요합니다.' });
+  try {
+    res.json(purge.exportUser(userId, auth.getUserById(userId)));
+  } catch (e) {
+    console.error('[export-user]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 실제 사용 가능한 모델 목록 (등록된 키로 조회, 과금 없음)
 app.post('/api/models', async (req, res) => {
   const uid = userIdFromReq(req);
