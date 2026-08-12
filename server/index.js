@@ -159,12 +159,12 @@ app.post('/api/settings', (req, res) => {
   const uid = userIdFromReq(req);
   if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
   try {
-    const { provider, model, apiKey, baseURL } = req.body || {};
+    const { provider, model, apiKey, baseURL, xferConsent } = req.body || {};
     // 무료 체험이 닫혀 있으면 새로 선택할 수 없다(예전 설정에서 빠져나오게).
     if (provider === 'free' && !aiGM.FREE_ENABLED) {
       return res.status(400).json({ error: aiGM.FREE_OFF_MESSAGE });
     }
-    const user = auth.updateSettings(uid, { provider, model, apiKey, baseURL });
+    const user = auth.updateSettings(uid, { provider, model, apiKey, baseURL, xferConsent });
     res.json({ user });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -181,6 +181,8 @@ app.post('/api/models', async (req, res) => {
   }
   try {
     const cfg = auth.getAiConfig(uid, provider);
+    const blocked = auth.xferBlockMessage(provider, cfg);
+    if (blocked) return res.status(400).json({ error: blocked });
     const models = await aiGM.listModels(provider, cfg);
     res.json({ models });
   } catch (e) {
@@ -198,6 +200,8 @@ app.post('/api/model-test', async (req, res) => {
   }
   try {
     const cfg = auth.getAiConfig(uid, provider);
+    const blocked = auth.xferBlockMessage(provider, cfg);
+    if (blocked) return res.status(400).json({ error: blocked });
     const sample = await aiGM.testModel({
       provider,
       model: typeof model === 'string' ? model.trim() : '',
@@ -522,6 +526,11 @@ io.on('connection', (socket) => {
     // 무료 체험이 닫힌 뒤에도 예전 설정이 'free'로 남아 있을 수 있다.
     if (provider === 'free' && !aiGM.FREE_ENABLED) {
       emit('error', { message: aiGM.FREE_OFF_MESSAGE });
+      return false;
+    }
+    const xferBlocked = auth.xferBlockMessage(provider, cfg);
+    if (xferBlocked) {
+      emit('error', { message: xferBlocked });
       return false;
     }
     // 'free'(서버 로컬 모델)는 사용자 키가 필요 없다.
@@ -994,6 +1003,8 @@ io.on('connection', (socket) => {
     } else if (!cfg.apiKey) {
       return emit('error', { message: `현재 챗의 제공자(${provider}) API 키가 없습니다. ⚙ 설정에서 등록하세요.` });
     }
+    const xferBlocked = auth.xferBlockMessage(provider, cfg);
+    if (xferBlocked) return emit('error', { message: xferBlocked });
     const gate = provider === 'free' ? freeGateReason(userId) : null;
     if (gate) return emit('error', { message: gate });
 

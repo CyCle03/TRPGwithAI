@@ -353,6 +353,27 @@
         <div class="free-notice hidden" id="setKeyGuide"></div>
         <div class="free-notice hidden" id="setFreeNotice"></div>
 
+        <div class="disclaimer" id="xferConsentBox">
+          <b>🌏 국외 이전 동의 (API 키 등록 시 필수)</b><br />
+          키를 등록하면 AI 기능을 쓸 때마다 아래 정보가 이용자가 고른 AI 사업자에게 국외로 전송됩니다.
+          <ul class="consent-list">
+            <li><b>이전 항목</b> — 입력한 대화 내용, 세계관·캐릭터 설정, 앞선 대화 맥락, 등록한 API 키</li>
+            <li><b>이전받는 자·국가</b> — 미국(Google·Anthropic·OpenAI·xAI), 중국(DeepSeek), 싱가포르 등(Alibaba Cloud). 커스텀은 직접 입력한 주소의 운영자</li>
+            <li><b>시기·방법</b> — AI를 호출할 때마다 암호화된 연결(TLS)로 전송</li>
+            <li><b>목적·보유기간</b> — AI 응답 생성. 전송 이후의 보관·이용은 각 사업자의 정책을 따르며 운영자는 통제할 수 없습니다</li>
+            <li><b>거부 방법·효과</b> — 동의하지 않거나 등록한 키를 삭제하면 전송되지 않습니다. AI 기능만 쓸 수 없고 계정·다른 서비스 이용에는 영향이 없습니다</li>
+          </ul>
+          <p id="xferConsentNeed" class="hidden">
+            <b>이미 등록해 둔 키가 있습니다.</b> AI 기능을 계속 쓰시려면 아래에 동의하고 저장해 주세요.
+            동의하지 않으시려면 그대로 두시면 됩니다 — 전송이 일어나지 않습니다.
+          </p>
+          <label class="consent-line">
+            <input type="checkbox" id="setXferConsent" />
+            <span>위 국외 이전에 동의합니다 —
+              <a href="https://elcherlab.com/privacy.html#s6" target="_blank" rel="noopener">개인정보처리방침 7장</a></span>
+          </label>
+        </div>
+
         <div class="disclaimer">
           <b>⚠️ 면책 조항</b><br />
           본 서비스는 개인이 만든 비상업 취미 프로젝트입니다. 등록하신 API 키의 사용량과 그에 따른 모든
@@ -460,6 +481,9 @@
   const settingsSaveBtn = $('settingsSave');
   const setFreeNoticeEl = $('setFreeNotice');
   const setKeyGuideEl = $('setKeyGuide');
+  const xferConsentBoxEl = $('xferConsentBox');
+  const xferConsentNeedEl = $('xferConsentNeed');
+  const setXferConsentEl = $('setXferConsent');
 
   function openSettings(firstTime) {
     settingsErrorEl.classList.add('hidden');
@@ -471,6 +495,8 @@
       setBaseUrlEl.value = App.settings.baseURL || '';
     }
     setKeyEl.value = '';
+    // 이미 동의한 사용자는 체크된 채로 열린다. 방침이 바뀌면 서버가 false를 준다.
+    setXferConsentEl.checked = !!(App.settings && App.settings.xferConsent);
     updateSettingsHints();
     settingsModal.classList.remove('hidden');
     if (stale) {
@@ -503,6 +529,11 @@
     const freeLive = prov === 'free' && App.freeAvailable;
     setKeyEl.disabled = freeLive;
     setKeyEl.placeholder = freeLive ? '무료 체험은 키가 필요 없습니다' : '키를 붙여넣기 (변경할 때만 입력)';
+    // 무료 체험(서버 내부 모델)은 외부로 나가지 않으므로 국외 이전 고지가 필요 없다.
+    xferConsentBoxEl.classList.toggle('hidden', freeLive);
+    // 방침 시행 전에 등록해 둔 키가 있는 경우 — 동의를 받기 전까지 AI 호출이 막힌다.
+    const consented = !!(App.settings && App.settings.xferConsent);
+    xferConsentNeedEl.classList.toggle('hidden', freeLive || !hasKey || consented);
     toggleFreeNotice(setFreeNoticeEl, prov);
   }
 
@@ -514,7 +545,17 @@
     try {
       const body = { provider: setProviderEl.value, model: setModelEl.value.trim() };
       if (setProviderEl.value === 'custom') body.baseURL = setBaseUrlEl.value.trim();
-      if (setKeyEl.value.trim()) body.apiKey = setKeyEl.value.trim();
+      if (setKeyEl.value.trim()) {
+        // 서버도 같은 조건으로 막지만, 여기서 걸러야 키를 들고 왕복하지 않는다.
+        if (!setXferConsentEl.checked) {
+          throw new Error('API 키를 등록하려면 국외 이전 동의에 체크해 주세요.');
+        }
+        body.apiKey = setKeyEl.value.trim();
+      }
+      // 고지가 화면에 떠 있을 때 체크한 것만 동의로 기록한다.
+      if (!xferConsentBoxEl.classList.contains('hidden') && setXferConsentEl.checked) {
+        body.xferConsent = true;
+      }
       const data = await api('/api/settings', body);
       App.settings = data.user.settings;
       if (!App.settings.keys) App.settings.keys = {};

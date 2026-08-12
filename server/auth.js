@@ -207,15 +207,34 @@ function getAiConfig(id, provider) {
     provider,
     apiKey: enc ? decrypt(enc) : null,
     baseURL: s.baseURL || '',
+    // 'free'(서버 로컬 모델)를 뺀 나머지는 호출 자체가 국외 이전이라 동의를 확인한다.
+    xferConsent: hasXferConsent(s),
   };
+}
+
+/** 국외 이전 동의가 필요한데 없을 때의 안내 문구. 없으면 null. */
+function xferBlockMessage(provider, cfg) {
+  if (provider === 'free' || cfg.xferConsent) return null;
+  return 'AI 사업자로의 국외 이전 동의가 필요합니다. ⚙ 설정에서 동의란에 체크하고 저장해 주세요.';
 }
 
 const VALID_PROVIDERS = ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom', 'free'];
 
 /**
- * 설정 갱신. provider/model/baseURL은 "새 게임 기본값", apiKey는 선택한 provider의 키.
+ * AI 사업자로의 국외 이전 별도 동의(개인정보 보호법 제28조의8 ①1호)의 기준 방침 시행일.
+ * 방침의 7.2 내용이 바뀌면 이 값을 올린다 — 기존 동의가 무효가 되어 다시 받는다.
  */
-function updateSettings(id, { provider, model, apiKey, baseURL }) {
+const XFER_POLICY_VERSION = '2026-08-12';
+
+function hasXferConsent(s) {
+  return !!(s && s.xferConsent && s.xferConsent.ver === XFER_POLICY_VERSION);
+}
+
+/**
+ * 설정 갱신. provider/model/baseURL은 "새 게임 기본값", apiKey는 선택한 provider의 키.
+ * 키를 등록·변경하려면 국외 이전 동의가 있어야 한다(xferConsent).
+ */
+function updateSettings(id, { provider, model, apiKey, baseURL, xferConsent }) {
   const db = loadUsers();
   const u = db.users[id];
   if (!u) throw new Error('사용자를 찾을 수 없습니다.');
@@ -232,9 +251,18 @@ function updateSettings(id, { provider, model, apiKey, baseURL }) {
     if (b === '' || /^https?:\/\//i.test(b)) s.baseURL = b;
     else throw new Error('엔드포인트 주소는 http:// 또는 https:// 로 시작해야 합니다.');
   }
+  // 국외 이전 동의는 키가 실제로 저장되기 전에 확인한다.
+  if (xferConsent === true) {
+    s.xferConsent = { at: new Date().toISOString(), ver: XFER_POLICY_VERSION };
+  }
   // 선택한 제공자의 키를 등록/삭제
   const p = VALID_PROVIDERS.includes(provider) ? provider : s.provider;
   if (typeof apiKey === 'string' && apiKey.trim()) {
+    if (!hasXferConsent(s)) {
+      throw new Error(
+        'API 키를 등록하려면 AI 사업자로의 국외 이전에 동의해야 합니다. 설정 화면의 동의란을 확인해 주세요.'
+      );
+    }
     s.keys[p] = encrypt(apiKey.trim());
   } else if (apiKey === null) {
     delete s.keys[p];
@@ -256,6 +284,8 @@ function publicUser(u) {
       model: s.model || '',
       baseURL: s.baseURL || '',
       keys: Object.fromEntries(Object.keys(keys).map((p) => [p, true])),
+      // 값이 아니라 "현재 방침 기준으로 동의가 유효한지"만 내보낸다.
+      xferConsent: hasXferConsent(s),
     },
   };
 }
@@ -266,6 +296,7 @@ module.exports = {
   getUserById,
   countUsers,
   getAiConfig,
+  xferBlockMessage,
   updateSettings,
   verifySession,
   verifyToken,
