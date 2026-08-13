@@ -43,7 +43,6 @@
       'common.authOriginFailed': '인증 서버 주소를 가져오지 못했습니다.',
       'common.default': '기본',
       'common.defaultValue': '기본값',
-      'common.none': '(없음)',
       'common.empty': '(비어 있음)',
       'common.notYet': '(아직 없음)',
 
@@ -223,7 +222,6 @@
       'gm.keyMissing': '⚠ {prov} 키가 없습니다. <b>⚙ 설정</b>에서 먼저 등록하세요{extra}.',
       'gm.keyMissingCustom': '(커스텀은 엔드포인트 주소)',
       'gm.buttonTitle': '이 게임의 AI 모델 변경',
-      'gm.buttonLabel': '모델',
 
       'len.veryshort': '아주 짧게',
       'len.short': '짧게',
@@ -256,8 +254,6 @@
       'play.customOk': '유효한 배치입니다. (표준 배열 사용)',
       'play.customBad': '표준 배열을 정확히 사용하세요: {parts}',
       'play.startGear': '시작 장비 선택',
-      'play.gearCount': '({n}/{max})',
-      'play.gearHint': '기본 장비에 더해 아래에서 2개를 고르세요.',
       'play.gearPickHint': '무기·방어구·추가 장비를 하나씩 고르세요. 방어구 선택에 따라 방어력이 달라집니다.',
       'play.baseGear': '<span class="bg-label">기본 장비:</span> {list}',
       'play.currentArmor': '현재 방어력: {n}',
@@ -363,12 +359,10 @@
       'chats.deleteAsk': '"{name}"을(를) 삭제할까요? 대화도 함께 지워집니다.',
       'chats.thisChar': '이 캐릭터',
       'chats.unnamed': '설정 안 된 캐릭터',
-      'chats.mine': '내 대화',
 
       // ── 캐릭터 챗: 대화 화면 ──
       'chat.back': '목록으로',
       'chat.edit': '캐릭터 설정 편집',
-      'chat.thinking': '입력 중',
       'chat.typing': '상대가 입력 중',
       'chat.inputPlaceholder': '메시지를 입력하세요…',
       'chat.send': '전송',
@@ -376,7 +370,6 @@
 
       // ── 캐릭터 챗: 만들기 ──
       'cp.titleNew': '💬 캐릭터 · 세계관 만들기',
-      'cp.titleEdit': '💬 캐릭터 · 세계관 편집',
       'cp.subtitle': '세계관과 여러 캐릭터를 직접 만들어 대화하세요. 캐릭터는 1명 이상 필요합니다.',
       'cp.title': '제목',
       'cp.titleOpt': '(선택 · 목록 표시명)',
@@ -420,7 +413,6 @@
       'cp.visLink': '🔗 링크 아는 사람만',
       'cp.visPublic': '🌐 공개 (갤러리에 노출)',
       'cp.publishHint': '공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.',
-      'cp.publishApply': '공개 적용',
       'cp.published': '{vis} 중 · 플레이 {n}회',
       'cp.shareLink': '공유 링크: <b>{link}</b>',
       'cp.save': '저장하고 대화 시작',
@@ -517,7 +509,6 @@
       'common.authOriginFailed': 'Could not reach the login server.',
       'common.default': 'default',
       'common.defaultValue': 'Default',
-      'common.none': '(none)',
       'common.empty': '(empty)',
       'common.notYet': '(none yet)',
 
@@ -696,7 +687,6 @@
       'gm.keyMissing': '⚠ No {prov} key. Register one in <b>⚙ Settings</b> first{extra}.',
       'gm.keyMissingCustom': ' (for Custom, the endpoint URL)',
       'gm.buttonTitle': 'Change the AI model for this game',
-      'gm.buttonLabel': 'Model',
 
       'len.veryshort': 'Very short',
       'len.short': 'Short',
@@ -729,8 +719,6 @@
       'play.customOk': 'Valid spread. (standard array)',
       'play.customBad': 'Use exactly the standard array: {parts}',
       'play.startGear': 'Choose starting gear',
-      'play.gearCount': '({n}/{max})',
-      'play.gearHint': 'On top of your base gear, pick 2 below.',
       'play.gearPickHint': 'Pick one weapon, one armor and one extra. Your armor rating depends on the armor you choose.',
       'play.baseGear': '<span class="bg-label">Base gear:</span> {list}',
       'play.currentArmor': 'Current armor: {n}',
@@ -836,12 +824,10 @@
       'chats.deleteAsk': 'Delete "{name}"? The conversation goes with it.',
       'chats.thisChar': 'this character',
       'chats.unnamed': 'Unnamed character',
-      'chats.mine': 'My chat',
 
       // ── character chat: conversation ──
       'chat.back': 'Back to list',
       'chat.edit': 'Edit character settings',
-      'chat.thinking': 'Typing',
       'chat.typing': 'Typing',
       'chat.inputPlaceholder': 'Type a message…',
       'chat.send': 'Send',
@@ -849,7 +835,6 @@
 
       // ── character chat: create ──
       'cp.titleNew': '💬 Create a character · world',
-      'cp.titleEdit': '💬 Edit character · world',
       'cp.subtitle': 'Build your own world and cast. At least one character is required.',
       'cp.title': 'Title',
       'cp.titleOpt': '(optional · shown in lists)',
@@ -893,7 +878,6 @@
       'cp.visLink': '🔗 Anyone with the link',
       'cp.visPublic': '🌐 Public (listed in the gallery)',
       'cp.publishHint': 'Once public, others can play it in their own private conversation.',
-      'cp.publishApply': 'Apply',
       'cp.published': '{vis} · played {n} times',
       'cp.shareLink': 'Share link: <b>{link}</b>',
       'cp.save': 'Save and start chatting',

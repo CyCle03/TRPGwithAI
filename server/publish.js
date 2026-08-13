@@ -20,13 +20,46 @@ function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadAll() {
+// 파싱한 db 를 메모리에 들고 있는다. 갤러리 화면 한 번에 listPublic·listTags 처럼
+// 여러 번 부르고, 그때마다 published.json 전체를 읽어 파싱하면 항목이 늘수록 그대로
+// 비용이 된다. 파일이 밖에서 바뀌었을 때도 따라가야 하므로 mtime+size 를 키로 둔다
+// (statSync 는 파싱보다 훨씬 싸다).
+let cache = null;
+let cacheKey = '';
+
+function fileKey() {
   try {
-    if (fs.existsSync(FILE)) return JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  } catch (e) {
-    console.error('published.json 로드 실패:', e.message);
+    const st = fs.statSync(FILE);
+    return `${st.mtimeMs}:${st.size}`;
+  } catch (_) {
+    return '';
   }
-  return { entries: {} };
+}
+
+/**
+ * 저장소 전체. **돌려준 객체는 캐시 그 자체다** — 고쳤으면 반드시 saveAll 로 저장해야
+ * 디스크와 어긋나지 않는다(이 파일 안의 모든 변경 함수가 그렇게 하고 있다).
+ */
+function loadAll() {
+  const key = fileKey();
+  if (cache && key === cacheKey) return cache;
+  if (!key) {
+    cache = { entries: {} };
+    cacheKey = key;
+    return cache;
+  }
+  try {
+    cache = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    cacheKey = key;
+  } catch (e) {
+    // 읽기·파싱 실패는 캐시하지 않는다. 캐시하면 파일이 다시 바뀌기 전까지
+    // 빈 저장소가 굳어져, 일시적인 오류가 갤러리를 통째로 비워버린다.
+    console.error('published.json 로드 실패:', e.message);
+    cache = null;
+    cacheKey = '';
+    return { entries: {} };
+  }
+  return cache;
 }
 
 function saveAll(db) {
@@ -34,6 +67,8 @@ function saveAll(db) {
   const tmp = FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), 'utf8');
   fs.renameSync(tmp, FILE);
+  cache = db;
+  cacheKey = fileKey();
 }
 
 function newPubId() {

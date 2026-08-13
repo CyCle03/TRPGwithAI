@@ -124,12 +124,16 @@ server/
   dungeonWorld.js  Presets for the 8 classes, equipment, move summaries, level-ups
   aiGM.js          Builds the GM prompt/schema + provider dispatch
   chat.js          Builds the Character Chat system prompt (no rules, no dice)
+  dungeonWorldEn.js English display names for Dungeon World data (the data itself stays Korean)
   auth.js          Verifies the shared session cookie + gm profile (provider, model, encrypted API key)
+  messages.js      English translations of server error messages — applied at one response boundary
   store.js         Game slot persistence      (data/sessions/<userId>.json)
   chatStore.js     Character Chat persistence (data/chats/<userId>.json)
   publish.js       Registry of published definitions, likes, comments, reports (data/published.json)
   seedGallery.js   Registers the 7 sample worlds bundled with the repo into the gallery (by genre)
+  seedGalleryEn.js English editions of the sample worlds (user-made worlds are never translated)
   uploads.js       Image upload storage/retrieval (data/uploads/)
+  purge.js         Deletes a closed account's data and sweeps uploads nothing references
   metrics.js       Daily visit statistics (IPs stored only as HMAC hashes)
   providers/
     geminiProvider.js     Gemini calls (responseSchema)
@@ -140,6 +144,7 @@ assets/sample/
   IMAGE_PROMPTS.md     Generation prompts and filename conventions for the 31 sample images not yet drawn
 public/
   common.js        Shared skeleton for all three pages — injects the user bar, ⚙ Settings and 🧠 model modal, account state
+  i18n.js          Korean/English dictionary and switching (`window.I18N`, `t()`, `data-i18n`)
   index.html/.js   /      Landing — sign in/sign up + mode selection (no socket)
   play.html/.js    /play  Dungeon World — character creation wizard + game screen
   chat.html/.js    /chat  Character Chat — bottom-tab app shell (Browse, My Chats, Create, Profile) + conversation screen
@@ -156,9 +161,45 @@ dropped and you land on the home page).
 An older shared link of the form `/?play=<id>` takes precedence over `next`.
 
 
+## Language (Korean · English)
+
+Korean is the source language. When a key is missing from the dictionary the UI falls back to
+**Korean, not English** — a missing translation never leaves the screen blank. The chosen language
+lives in `localStorage` only (no cookie — section 9.1 of the privacy policy states that the only
+cookie is the sign-in one), and is carried between subdomains with a `?lang=en` link.
+
+Rules specific to this app:
+
+- **The language of AI output is fixed per game and per conversation.** The screen language at
+  creation time is baked in as `session.lang` / `chat.lang`, and toggling later does not change a
+  story already in progress. The one exception is playing someone else's world from the gallery,
+  which uses the **player's** screen language — playing a Korean world in English is the point of
+  that feature.
+- **Image tags sent to the AI are never translated.** `extractImage` in `chat.js` matches
+  `[img:tag]` as an exact string, so if the model translates the tag too, the image silently
+  disappears with no error. The English prompt insists the tag be copied character for character.
+- **Dungeon World data is not translated.** The Korean strings for classes, gear and weapon tags are
+  the keys that saves and prompts use to refer to each other (for example the aiGM rule "'정밀'
+  means DEX"). They are mapped through `dungeonWorldEn.js` only for display and for the English
+  prompt.
+- **User-made worlds are not translated.** The original text is the stored value, so it is left
+  as-is and the gallery card carries an original-language badge when it differs from the screen
+  language (`shownLang` in `publish.js`). Only the 7 samples — text we wrote ourselves — have
+  English editions, in `seedGalleryEn.js`.
+- **Tags (genres) are stored as one original value and only translated for display.** Storing a
+  different value per language would split one genre into two in the gallery filter.
+- **Server error messages are translated at a single response boundary.** Instead of keying each
+  route, `messages.js` maps the Korean original to English. There are only two boundaries — the
+  express `res.json` wrapper and the socket `emit('error')` — and anything missing from the table
+  goes out in Korean. The language arrives via the REST `X-Lang` header and the socket handshake
+  query (plus a `setLang` event).
+
 ## Storage and security
 
 - Storage is JSON files under `data/`. It runs without a separate database.
+- Published definitions (`published.json`) are parsed once and cached in memory, because a single
+  gallery screen reads them several times (`listPublic`, `listTags`, …). The cache is keyed on the
+  file's mtime and size, so an edit made outside the process is still picked up.
 - **This app does not own accounts or sessions.** Sign-up, sign-in and sign-out belong to the
   single sign-on service (`auth.elcherlab.com`); here the `.elcherlab.com` domain cookie is only
   **verified locally** with a shared secret (the auth server is not called per request, so existing

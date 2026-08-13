@@ -257,13 +257,6 @@ function showChats() {
   renderChatsList();
   showScreen(chatsEl, 'chats');
 }
-/** 대화 화면에서 뒤로 — 목록으로 돌아간다. */
-function backToChat() {
-  if (currentChat && currentChat.configured) showChat();
-  else if (currentChat) openChatSetupForm(currentChat);
-  else location.href = '/';
-}
-
 // ---------- 대화 ----------
 function updateChatModelLabel() {
   chatModelLabelEl.textContent = App.modelLabel(currentChatAi);

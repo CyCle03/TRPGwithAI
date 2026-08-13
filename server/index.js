@@ -914,31 +914,47 @@ io.on('connection', (socket) => {
     emit('chatState', chatStatePayload(c, userId));
   });
 
-  socket.on('galleryList', (payload) => {
-    const sort = (payload && payload.sort) || 'recent';
-    const tag = (payload && payload.tag) || '';
+  /**
+   * 갤러리 목록을 내려보낸다. 목록이 바뀌는 조치(공개 중단·운영자 조치) 뒤에도
+   * 같은 payload 를 다시 보내야 해서 한 곳에 모아 둔다.
+   */
+  function emitGallery(opts) {
+    const sort = (opts && opts.sort) || 'recent';
+    const tag = (opts && opts.tag) || '';
     emit('gallery', {
       items: publish.listPublic({ sort, tag, lang: uiLang }),
       tags: publish.listTags(),
       sort,
       tag,
     });
-  });
+  }
 
-  // 내 프로필: 내가 공개한 작품 + 합계
-  socket.on('profileList', () => {
+  /**
+   * 내 프로필(내가 공개한 작품). 합계는 프로필 탭에서만 쓰고, 목록만 새로고침하는
+   * 쪽에서는 null 로 보내 클라이언트가 기존 합계를 그대로 두게 한다.
+   */
+  function emitProfile({ totals = false } = {}) {
     const mine = publish.listMine(userId, uiLang);
     emit('profile', {
       username: user ? user.username : '',
       mine,
-      totals: {
-        works: mine.length,
-        likes: mine.reduce((s, x) => s + (x.likes || 0), 0),
-        plays: mine.reduce((s, x) => s + (x.plays || 0), 0),
-        comments: mine.reduce((s, x) => s + (x.commentCount || 0), 0),
-      },
+      totals: totals
+        ? {
+            works: mine.length,
+            likes: mine.reduce((s, x) => s + (x.likes || 0), 0),
+            plays: mine.reduce((s, x) => s + (x.plays || 0), 0),
+            comments: mine.reduce((s, x) => s + (x.commentCount || 0), 0),
+          }
+        : null,
     });
+  }
+
+  socket.on('galleryList', (payload) => {
+    emitGallery({ sort: payload && payload.sort, tag: payload && payload.tag });
   });
+
+  // 내 프로필: 내가 공개한 작품 + 합계
+  socket.on('profileList', () => emitProfile({ totals: true }));
 
   // 추천(좋아요) 토글
   socket.on('toggleLike', (payload) => {
@@ -1031,8 +1047,8 @@ io.on('connection', (socket) => {
       return emit('error', { message: e.message });
     }
     emit('adminReports', { items: publish.listReported() });
-    emit('gallery', { items: publish.listPublic({ lang: uiLang }), tags: publish.listTags(), sort: 'recent', tag: '' });
-    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId, uiLang), totals: null });
+    emitGallery();
+    emitProfile();
   });
 
   // 갤러리의 '내가 공개한 것'에서 바로 공개 중단(연결된 챗이 없어도 가능)
@@ -1047,8 +1063,8 @@ io.on('connection', (socket) => {
       if (c.publishedId === (payload && payload.id)) c.publishedId = null;
     });
     persistChats(userId, uc);
-    emit('gallery', { items: publish.listPublic({ lang: uiLang }), tags: publish.listTags(), sort: 'recent', tag: '' });
-    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId, uiLang), totals: null });
+    emitGallery();
+    emitProfile();
   });
 
   // 갤러리 항목을 내 대화로 가져와 플레이 (정의는 복사, 대화는 각자 별도)
