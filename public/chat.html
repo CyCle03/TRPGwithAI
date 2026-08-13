@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ko">
+<!-- lang 속성과 <title> 은 i18n.js 가 현재 언어로 덮어쓴다. -->
+<html lang="ko" data-i18n-doctitle="meta.title.chat">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -15,14 +16,14 @@
     <!-- ── 홈: 공개 갤러리 (챗의 기본 화면) ───────────────── -->
     <div id="gallery" class="setup hidden">
       <div class="setup-card wide">
-        <h1>🌐 둘러보기</h1>
-        <p class="subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
+        <h1 data-i18n="gal.title">🌐 둘러보기</h1>
+        <p class="subtitle" data-i18n="gal.subtitle">다른 사용자가 공개한 세계관·캐릭터를 각자 자기 대화로 플레이할 수 있어요.</p>
 
         <div class="gallery-controls">
           <select id="gallerySort">
-            <option value="recent">최신순</option>
-            <option value="likes">추천순</option>
-            <option value="plays">플레이순</option>
+            <option value="recent" data-i18n="gal.sortRecent">최신순</option>
+            <option value="likes" data-i18n="gal.sortLikes">추천순</option>
+            <option value="plays" data-i18n="gal.sortPlays">플레이순</option>
           </select>
           <div id="galleryTags" class="tag-filter"></div>
         </div>
@@ -30,14 +31,14 @@
         <div id="galleryList" class="gallery-list"></div>
 
         <div id="adminPanel" class="hidden">
-          <label>📊 접속 통계 <span class="opt">(운영자 전용)</span></label>
-          <p class="hint">한국 시간 기준. 방문자는 IP를 되돌릴 수 없게 변환해 셉니다.</p>
+          <label><span data-i18n="adm.stats">📊 접속 통계</span> <span class="opt" data-i18n="adm.only">(운영자 전용)</span></label>
+          <p class="hint" data-i18n="adm.statsHint">한국 시간 기준. 방문자는 IP를 되돌릴 수 없게 변환해 셉니다.</p>
           <div class="stat-grid" id="statToday"></div>
           <div class="stat-bars" id="statChart"></div>
           <p class="hint" id="statTotals"></p>
 
-          <label>🛡 신고 관리 <span class="opt">(운영자 전용)</span></label>
-          <p class="hint">신고가 들어온 항목입니다. 확인 후 조치하세요.</p>
+          <label><span data-i18n="adm.reports">🛡 신고 관리</span> <span class="opt" data-i18n="adm.only">(운영자 전용)</span></label>
+          <p class="hint" data-i18n="adm.reportsHint">신고가 들어온 항목입니다. 확인 후 조치하세요.</p>
           <div id="adminList" class="gallery-list"></div>
         </div>
       </div>
@@ -46,11 +47,11 @@
     <!-- ── 내 대화 목록 ──────────────────────────────────── -->
     <div id="chats" class="setup hidden">
       <div class="setup-card wide">
-        <h1>💬 내 대화</h1>
-        <p class="subtitle">저장한 캐릭터와 이어서 대화하세요.</p>
+        <h1 data-i18n="chats.title">💬 내 대화</h1>
+        <p class="subtitle" data-i18n="chats.subtitle">저장한 캐릭터와 이어서 대화하세요.</p>
         <div id="chatsList" class="chats-list"></div>
-        <p class="hint" id="chatsEmpty">아직 만든 캐릭터가 없어요. 둘러보기에서 마음에 드는 세계관을 플레이하거나, 직접 만들어 보세요.</p>
-        <button type="button" id="newChatBtn" class="primary block">＋ 새 캐릭터 만들기</button>
+        <p class="hint" id="chatsEmpty" data-i18n="chats.empty">아직 만든 캐릭터가 없어요. 둘러보기에서 마음에 드는 세계관을 플레이하거나, 직접 만들어 보세요.</p>
+        <button type="button" id="newChatBtn" class="primary block" data-i18n="chats.new">＋ 새 캐릭터 만들기</button>
       </div>
     </div>
 
@@ -58,18 +59,18 @@
     <div id="chat" class="chat-screen hidden">
       <main class="log-pane">
         <header class="log-header">
-          <button type="button" id="chatBackBtn" class="icon-btn" title="목록으로" aria-label="목록으로">←</button>
+          <button type="button" id="chatBackBtn" class="icon-btn" data-i18n-title="chat.back" data-i18n-aria="chat.back" title="목록으로" aria-label="목록으로">←</button>
           <div id="chatBar" class="chat-title"></div>
           <div class="header-actions">
-            <button id="chatModelBtn" class="ghost" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
-            <button id="chatEditBtn" class="ghost" title="캐릭터 설정 편집">✎</button>
+            <button id="chatModelBtn" class="ghost" data-i18n-title="gm.buttonTitle" title="이 챗의 AI 모델 변경">🧠 <span id="chatModelLabel">모델</span></button>
+            <button id="chatEditBtn" class="ghost" data-i18n-title="chat.edit" title="캐릭터 설정 편집">✎</button>
           </div>
         </header>
         <div id="chatLog" class="log"><div id="chatLogInner" class="log-inner"></div></div>
         <div id="chatThinking" class="thinking hidden">입력 중…</div>
         <form id="chatForm" class="input-bar">
-          <input id="chatInput" type="text" placeholder="메시지를 입력하세요…" autocomplete="off" />
-          <button type="submit" class="primary" id="chatSendBtn">전송</button>
+          <input id="chatInput" type="text" data-i18n-ph="chat.inputPlaceholder" placeholder="메시지를 입력하세요…" autocomplete="off" />
+          <button type="submit" class="primary" id="chatSendBtn" data-i18n="chat.send">전송</button>
         </form>
       </main>
     </div>
@@ -77,65 +78,65 @@
     <!-- ── 만들기 / 편집: 세계관 + 다중 캐릭터 설정 ──────────── -->
     <div id="chatSetup" class="setup hidden">
       <div class="setup-card wide">
-        <h1 id="chatSetupTitle">💬 캐릭터 · 세계관 만들기</h1>
-        <p class="subtitle">세계관과 여러 캐릭터를 직접 만들어 대화하세요. 캐릭터는 1명 이상 필요합니다.</p>
+        <h1 id="chatSetupTitle" data-i18n="cp.titleNew">💬 캐릭터 · 세계관 만들기</h1>
+        <p class="subtitle" data-i18n="cp.subtitle">세계관과 여러 캐릭터를 직접 만들어 대화하세요. 캐릭터는 1명 이상 필요합니다.</p>
 
-        <label>제목 <span class="opt">(선택 · 목록 표시명)</span></label>
-        <input id="cpTitle" type="text" maxlength="80" placeholder="예: 안개 낀 마법 학원" />
+        <label><span data-i18n="cp.title">제목</span> <span class="opt" data-i18n="cp.titleOpt">(선택 · 목록 표시명)</span></label>
+        <input id="cpTitle" type="text" maxlength="80" data-i18n-ph="cp.titlePlaceholder" placeholder="예: 안개 낀 마법 학원" />
 
-        <label>세계관 설정 <span class="opt">(선택 · 여러 캐릭터일 때 유용)</span></label>
-        <textarea id="cpLore" rows="3" placeholder="배경 세계, 규칙, 분위기 등"></textarea>
+        <label><span data-i18n="cp.lore">세계관 설정</span> <span class="opt" data-i18n="cp.loreOpt">(선택 · 여러 캐릭터일 때 유용)</span></label>
+        <textarea id="cpLore" rows="3" data-i18n-ph="cp.lorePlaceholder" placeholder="배경 세계, 규칙, 분위기 등"></textarea>
 
-        <label>등장인물 *</label>
+        <label data-i18n="cp.characters">등장인물 *</label>
         <div id="cpCharacters" class="cp-characters"></div>
-        <button type="button" id="cpAddChar" class="ghost cp-add">＋ 캐릭터 추가</button>
+        <button type="button" id="cpAddChar" class="ghost cp-add" data-i18n="cp.addChar">＋ 캐릭터 추가</button>
 
-        <label>이미지 <span class="opt">(선택 · 태그를 달면 AI가 상황에 맞춰 보여줍니다)</span></label>
+        <label><span data-i18n="cp.images">이미지</span> <span class="opt" data-i18n="cp.imagesOpt">(선택 · 태그를 달면 AI가 상황에 맞춰 보여줍니다)</span></label>
         <div id="cpImages" class="cp-images"></div>
         <input type="file" id="cpImageFile" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
-        <button type="button" id="cpAddImage" class="ghost cp-add">＋ 이미지 추가</button>
-        <p class="hint">
+        <button type="button" id="cpAddImage" class="ghost cp-add" data-i18n="cp.addImage">＋ 이미지 추가</button>
+        <p class="hint" data-i18n-html="cp.imageHint">
           2MB 이하 png/jpg/webp/gif, 최대 16장. 태그 예: <b>루나-미소</b>, <b>밤의 탑</b>, <b>전투</b>
         </p>
         <p class="hint hidden" id="cpCoverHint"></p>
 
-        <label>시작 상황 / 시나리오 <span class="opt">(선택)</span></label>
-        <textarea id="cpScenario" rows="3" placeholder="첫 장면, 어디서 어떻게 시작하는지"></textarea>
+        <label><span data-i18n="cp.scenario">시작 상황 / 시나리오</span> <span class="opt" data-i18n="common.optional">(선택)</span></label>
+        <textarea id="cpScenario" rows="3" data-i18n-ph="cp.scenarioPlaceholder" placeholder="첫 장면, 어디서 어떻게 시작하는지"></textarea>
 
-        <label>첫 인사말 / 오프닝 <span class="opt">(선택)</span></label>
-        <textarea id="cpGreeting" rows="2" placeholder="대화 시작 시 먼저 보여줄 장면·대사"></textarea>
+        <label><span data-i18n="cp.greeting">첫 인사말 / 오프닝</span> <span class="opt" data-i18n="common.optional">(선택)</span></label>
+        <textarea id="cpGreeting" rows="2" data-i18n-ph="cp.greetingPlaceholder" placeholder="대화 시작 시 먼저 보여줄 장면·대사"></textarea>
 
-        <label>내 페르소나 <span class="opt">(선택)</span></label>
-        <textarea id="cpUserPersona" rows="2" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
+        <label><span data-i18n="cp.persona">내 페르소나</span> <span class="opt" data-i18n="common.optional">(선택)</span></label>
+        <textarea id="cpUserPersona" rows="2" data-i18n-ph="cp.personaPlaceholder" placeholder="상대가 '나'를 어떻게 인식할지 (이름·관계 등)"></textarea>
 
-        <label>장르 · 태그 <span class="opt">(선택 · 쉼표로 구분, 최대 6개)</span></label>
-        <input id="cpTags" type="text" placeholder="예: 판타지, 미스터리, 느와르" />
+        <label><span data-i18n="cp.tags">장르 · 태그</span> <span class="opt" data-i18n="cp.tagsOpt">(선택 · 쉼표로 구분, 최대 6개)</span></label>
+        <input id="cpTags" type="text" data-i18n-ph="cp.tagsPlaceholder" placeholder="예: 판타지, 미스터리, 느와르" />
         <div id="cpTagSuggest" class="tag-row"></div>
 
-        <label>권장 응답 길이 <span class="opt">(플레이어가 각자 바꿀 수 있어요)</span></label>
+        <label><span data-i18n="cp.length">권장 응답 길이</span> <span class="opt" data-i18n="cp.lengthOpt">(플레이어가 각자 바꿀 수 있어요)</span></label>
         <select id="cpLength">
-          <option value="veryshort">아주 짧게 (1~2문장 · 메신저형)</option>
-          <option value="short">짧게 (2~4문장)</option>
-          <option value="medium">보통 (1~2문단)</option>
-          <option value="long">길게 (3~4문단)</option>
-          <option value="verylong">아주 길게 (250~300단어 · 소설형)</option>
+          <option value="veryshort" data-i18n="len.opt.veryshort">아주 짧게 (1~2문장 · 메신저형)</option>
+          <option value="short" data-i18n="len.opt.short">짧게 (2~4문장)</option>
+          <option value="medium" data-i18n="len.opt.medium">보통 (1~2문단)</option>
+          <option value="long" data-i18n="len.opt.long">길게 (3~4문단)</option>
+          <option value="verylong" data-i18n="len.opt.verylong">아주 길게 (250~300단어 · 소설형)</option>
         </select>
 
-        <label>공개 설정</label>
+        <label data-i18n="cp.visibility">공개 설정</label>
         <div class="publish-row">
           <select id="cpVisibility">
-            <option value="private">🔒 비공개 (나만)</option>
-            <option value="link">🔗 링크 아는 사람만</option>
-            <option value="public">🌐 공개 (갤러리에 노출)</option>
+            <option value="private" data-i18n="cp.visPrivate">🔒 비공개 (나만)</option>
+            <option value="link" data-i18n="cp.visLink">🔗 링크 아는 사람만</option>
+            <option value="public" data-i18n="cp.visPublic">🌐 공개 (갤러리에 노출)</option>
           </select>
-          <button type="button" id="cpPublish" class="ghost">적용</button>
+          <button type="button" id="cpPublish" class="ghost" data-i18n="common.apply">적용</button>
         </div>
-        <p class="hint" id="cpPublishHint">공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.</p>
+        <p class="hint" id="cpPublishHint" data-i18n="cp.publishHint">공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.</p>
 
         <div id="chatSetupError" class="auth-error hidden"></div>
         <div class="wizard-nav sticky-nav">
-          <button id="cpCancel" class="ghost">취소</button>
-          <button id="cpSave" class="primary">저장하고 대화 시작</button>
+          <button id="cpCancel" class="ghost" data-i18n="common.cancel">취소</button>
+          <button id="cpSave" class="primary" data-i18n="cp.save">저장하고 대화 시작</button>
         </div>
       </div>
     </div>
@@ -143,23 +144,23 @@
     <!-- ── 프로필 ────────────────────────────────────────── -->
     <div id="profile" class="setup hidden">
       <div class="setup-card wide">
-        <h1>👤 내 프로필</h1>
+        <h1 data-i18n="prof.title">👤 내 프로필</h1>
         <p class="subtitle" id="profileSub"></p>
         <div id="profileTotals" class="profile-totals"></div>
 
-        <label>내가 공개한 작품</label>
+        <label data-i18n="prof.mine">내가 공개한 작품</label>
         <div id="profileList" class="gallery-list"></div>
 
-        <label>다른 서비스</label>
+        <label data-i18n="prof.other">다른 서비스</label>
         <div class="link-rows">
-          <a class="link-row" href="/play"><span>🎲</span> AI GM 던전 월드로 이동</a>
-          <a class="link-row" href="/"><span>🏠</span> 서비스 선택 화면</a>
+          <a class="link-row" href="/play"><span>🎲</span> <span data-i18n="prof.toPlay">AI GM 던전 월드로 이동</span></a>
+          <a class="link-row" href="/"><span>🏠</span> <span data-i18n="prof.toHome">서비스 선택 화면</span></a>
         </div>
 
-        <label>계정</label>
+        <label data-i18n="prof.account">계정</label>
         <div class="link-rows">
-          <button type="button" id="profileSettingsBtn" class="link-row"><span>⚙</span> 설정 · API 키</button>
-          <button type="button" id="profileLogoutBtn" class="link-row danger"><span>↩</span> 로그아웃</button>
+          <button type="button" id="profileSettingsBtn" class="link-row"><span>⚙</span> <span data-i18n="prof.settings">설정 · API 키</span></button>
+          <button type="button" id="profileLogoutBtn" class="link-row danger"><span>↩</span> <span data-i18n="prof.logout">로그아웃</span></button>
         </div>
       </div>
     </div>
@@ -168,34 +169,35 @@
     <div id="detailModal" class="modal-overlay hidden">
       <div class="modal-card sheet">
         <div class="sheet-grip" aria-hidden="true"></div>
-        <h2 id="dtTitle">작품</h2>
+        <h2 id="dtTitle" data-i18n="dt.title">작품</h2>
         <p class="modal-sub" id="dtMeta"></p>
         <div id="dtTags" class="tag-row"></div>
         <div class="detail-actions">
-          <button id="dtLike" class="ghost">♥ 추천 <span id="dtLikeCount">0</span></button>
-          <button id="dtPlay" class="primary">플레이</button>
+          <button id="dtLike" class="ghost"><span data-i18n="dt.like">♥ 추천</span> <span id="dtLikeCount">0</span></button>
+          <button id="dtPlay" class="primary" data-i18n="dt.play">플레이</button>
         </div>
-        <label>댓글 <span class="opt" id="dtCommentCount"></span></label>
+        <label><span data-i18n="dt.comments">댓글</span> <span class="opt" id="dtCommentCount"></span></label>
         <div id="dtComments" class="comment-list"></div>
         <div class="comment-form">
-          <input id="dtCommentInput" type="text" maxlength="500" placeholder="댓글을 입력하세요" />
-          <button id="dtCommentSend" class="primary">등록</button>
+          <input id="dtCommentInput" type="text" maxlength="500" data-i18n-ph="dt.commentPlaceholder" placeholder="댓글을 입력하세요" />
+          <button id="dtCommentSend" class="primary" data-i18n="dt.commentSend">등록</button>
         </div>
         <div class="wizard-nav">
-          <button id="dtClose" class="ghost">닫기</button>
+          <button id="dtClose" class="ghost" data-i18n="common.close">닫기</button>
         </div>
       </div>
     </div>
 
     <!-- ── 하단 탭바 ─────────────────────────────────────── -->
-    <nav id="tabbar" class="tabbar hidden" aria-label="주요 화면">
-      <button type="button" class="tab" data-tab="home"><span class="ti">🌐</span>둘러보기</button>
-      <button type="button" class="tab" data-tab="chats"><span class="ti">💬</span>내 대화</button>
-      <button type="button" class="tab" data-tab="create"><span class="ti">＋</span>만들기</button>
-      <button type="button" class="tab" data-tab="profile"><span class="ti">👤</span>프로필</button>
+    <nav id="tabbar" class="tabbar hidden" data-i18n-aria="tab.aria" aria-label="주요 화면">
+      <button type="button" class="tab" data-tab="home"><span class="ti">🌐</span><span data-i18n="tab.home">둘러보기</span></button>
+      <button type="button" class="tab" data-tab="chats"><span class="ti">💬</span><span data-i18n="tab.chats">내 대화</span></button>
+      <button type="button" class="tab" data-tab="create"><span class="ti">＋</span><span data-i18n="tab.create">만들기</span></button>
+      <button type="button" class="tab" data-tab="profile"><span class="ti">👤</span><span data-i18n="tab.profile">프로필</span></button>
     </nav>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/i18n.js"></script>
     <script src="/common.js"></script>
     <script src="/chat.js"></script>
   </body>

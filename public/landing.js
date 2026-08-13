@@ -1,5 +1,7 @@
-/* global App */
+/* global App, I18N */
 'use strict';
+
+const t = I18N.t;
 
 /**
  * 랜딩 페이지 — 로그인/회원가입 + 모드 선택.
@@ -65,19 +67,22 @@ function setAuthMode(mode) {
   authTermsEl.classList.toggle('hidden', mode !== 'signup');
   authAgeEl.checked = false;
   if (mode === 'login') {
-    authSubtitleEl.textContent = '로그인하고 모험을 시작하세요';
-    authSubmitEl.textContent = '로그인';
-    authToggleTextEl.textContent = '계정이 없나요?';
-    authSwitchEl.textContent = '회원가입';
+    authSubtitleEl.textContent = t('auth.subtitle.login');
+    authSubmitEl.textContent = t('auth.login');
+    authToggleTextEl.textContent = t('auth.noAccount');
+    authSwitchEl.textContent = t('auth.signup');
     authPassEl.setAttribute('autocomplete', 'current-password');
   } else {
-    authSubtitleEl.textContent = '새 계정을 만들어 시작하세요';
-    authSubmitEl.textContent = '회원가입';
-    authToggleTextEl.textContent = '이미 계정이 있나요?';
-    authSwitchEl.textContent = '로그인';
+    authSubtitleEl.textContent = t('auth.subtitle.signup');
+    authSubmitEl.textContent = t('auth.signup');
+    authToggleTextEl.textContent = t('auth.hasAccount');
+    authSwitchEl.textContent = t('auth.login');
     authPassEl.setAttribute('autocomplete', 'new-password');
   }
 }
+
+// 로그인/가입 문구는 모드에 따라 달라서 data-i18n 으로 못 박을 수 없다 — 다시 그린다.
+document.addEventListener('i18n:change', () => setAuthMode(authMode));
 
 authSwitchEl.addEventListener('click', (e) => {
   e.preventDefault();
@@ -89,7 +94,7 @@ async function submitAuth() {
   const password = authPassEl.value;
   if (!username || !password) return;
   if (authMode === 'signup' && !authAgeEl.checked) {
-    authErrorEl.textContent = '만 14세 이상 확인과 약관 동의에 체크해 주세요.';
+    authErrorEl.textContent = t('auth.needConsent');
     authErrorEl.classList.remove('hidden');
     return;
   }

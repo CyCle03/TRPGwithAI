@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ko">
+<!-- lang 속성과 <title> 은 i18n.js 가 현재 언어로 덮어쓴다. -->
+<html lang="ko" data-i18n-doctitle="meta.title.play">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,28 +13,28 @@
     <!-- 캐릭터 생성 화면 (시트 만들기 4단계) -->
     <div id="setup" class="setup hidden">
       <div class="setup-card">
-        <h1>🎲 AI GM 솔로 던전 월드</h1>
-        <p class="subtitle">캐릭터 시트를 만들어 모험을 시작하세요</p>
+        <h1 data-i18n="play.title">🎲 AI GM 솔로 던전 월드</h1>
+        <p class="subtitle" data-i18n="play.subtitle">캐릭터 시트를 만들어 모험을 시작하세요</p>
 
         <div class="steps">
-          <span class="step active" data-step="1">1 · 클래스</span>
-          <span class="step" data-step="2">2 · 능력치</span>
-          <span class="step" data-step="3">3 · 장비</span>
-          <span class="step" data-step="4">4 · 마무리</span>
+          <span class="step active" data-step="1" data-i18n="play.step1">1 · 클래스</span>
+          <span class="step" data-step="2" data-i18n="play.step2">2 · 능력치</span>
+          <span class="step" data-step="3" data-i18n="play.step3">3 · 장비</span>
+          <span class="step" data-step="4" data-i18n="play.step4">4 · 마무리</span>
         </div>
 
         <!-- Step 1: 클래스 -->
         <div class="step-panel" data-panel="1">
-          <label>클래스 선택</label>
+          <label data-i18n="play.pickClass">클래스 선택</label>
           <div id="classList" class="class-list"></div>
         </div>
 
         <!-- Step 2: 능력치 -->
         <div class="step-panel hidden" data-panel="2">
-          <label>능력치 배분</label>
+          <label data-i18n="play.assignStats">능력치 배분</label>
           <div class="stat-mode">
-            <button type="button" id="modeRecommend" class="toggle active">추천 배치</button>
-            <button type="button" id="modeCustom" class="toggle">직접 배분</button>
+            <button type="button" id="modeRecommend" class="toggle active" data-i18n="play.modeRecommend">추천 배치</button>
+            <button type="button" id="modeCustom" class="toggle" data-i18n="play.modeCustom">직접 배분</button>
           </div>
           <p class="hint" id="statHint"></p>
           <div id="statAssign" class="stat-assign"></div>
@@ -41,34 +42,35 @@
 
         <!-- Step 3: 장비 + 배울 기술 -->
         <div class="step-panel hidden" data-panel="3">
-          <label>시작 장비 선택 <span class="opt" id="gearCount">(0/2)</span></label>
+          <label><span data-i18n="play.startGear">시작 장비 선택</span> <span class="opt" id="gearCount">(0/2)</span></label>
           <p class="hint" id="gearHint">기본 장비에 더해 아래에서 2개를 고르세요.</p>
           <div id="baseGear" class="base-gear"></div>
           <div id="gearOptions" class="gear-options"></div>
-          <label>이 클래스가 배울 수 있는 기술</label>
-          <p class="hint">레벨업 때 아래 기술 중 하나씩 습득합니다.</p>
+          <label data-i18n="play.learnable">이 클래스가 배울 수 있는 기술</label>
+          <p class="hint" data-i18n="play.learnableHint">레벨업 때 아래 기술 중 하나씩 습득합니다.</p>
           <div id="learnMoves" class="learn-moves"></div>
         </div>
 
         <!-- Step 4: 이름/소개 + 시트 요약 -->
         <div class="step-panel hidden" data-panel="4">
-          <label>캐릭터 이름</label>
-          <input id="charName" type="text" placeholder="예: 아린" maxlength="40" />
-          <label>한 줄 소개 <span class="opt">(선택)</span></label>
+          <label data-i18n="play.charName">캐릭터 이름</label>
+          <input id="charName" type="text" data-i18n-ph="play.charNamePlaceholder" placeholder="예: 아린" maxlength="40" />
+          <label><span data-i18n="play.charLook">한 줄 소개</span> <span class="opt" data-i18n="common.optional">(선택)</span></label>
           <input
             id="charLook"
             type="text"
+            data-i18n-ph="play.charLookPlaceholder"
             placeholder="예: 상처투성이 갑옷을 걸친 과묵한 용병"
             maxlength="200"
           />
-          <p class="hint">외형·성격·배경을 적으면 GM이 첫 장면에 반영합니다.</p>
+          <p class="hint" data-i18n="play.charLookHint">외형·성격·배경을 적으면 GM이 첫 장면에 반영합니다.</p>
           <div id="sheetSummary" class="sheet-summary"></div>
         </div>
 
         <div class="wizard-nav">
-          <button type="button" id="prevBtn" class="ghost hidden">이전</button>
-          <button type="button" id="nextBtn" class="primary">다음</button>
-          <button type="button" id="startBtn" class="primary hidden">모험 시작</button>
+          <button type="button" id="prevBtn" class="ghost hidden" data-i18n="common.prev">이전</button>
+          <button type="button" id="nextBtn" class="primary" data-i18n="common.next">다음</button>
+          <button type="button" id="startBtn" class="primary hidden" data-i18n="play.start">모험 시작</button>
         </div>
       </div>
     </div>
@@ -77,9 +79,9 @@
     <div id="game" class="game hidden">
       <!-- 좌측: 필드 정보 (적 / 동료) -->
       <aside class="field-pane">
-        <h3>⚔️ 적</h3>
+        <h3 data-i18n="game.enemies">⚔️ 적</h3>
         <div id="enemies" class="npc-list"></div>
-        <h3>🤝 동료</h3>
+        <h3 data-i18n="game.companions">🤝 동료</h3>
         <div id="companions" class="npc-list"></div>
       </aside>
 
@@ -87,29 +89,30 @@
         <header class="log-header">
           <div id="slotBar" class="slot-bar"></div>
           <div class="header-actions">
-            <button id="gameModelBtn" class="ghost" title="이 게임의 AI 모델 변경">🧠 <span id="gameModelLabel">모델</span></button>
-            <button id="newGameBtn" class="ghost" title="새 게임 슬롯 만들기">＋ 새 게임</button>
+            <button id="gameModelBtn" class="ghost" data-i18n-title="gm.buttonTitle" title="이 게임의 AI 모델 변경">🧠 <span id="gameModelLabel">모델</span></button>
+            <button id="newGameBtn" class="ghost" data-i18n-title="game.newGameTitle" data-i18n="game.newGame" title="새 게임 슬롯 만들기">＋ 새 게임</button>
           </div>
         </header>
         <div id="log" class="log"><div id="logInner" class="log-inner"></div></div>
         <div id="thinking" class="thinking hidden">GM이 이야기를 짜는 중…</div>
         <div id="suggestions" class="suggestions hidden"></div>
         <form id="inputForm" class="input-bar">
-          <button type="button" class="ghost suggest-btn" id="suggestBtn" title="행동 제안 받기">
+          <button type="button" class="ghost suggest-btn" id="suggestBtn" data-i18n-title="game.suggestTitle" data-i18n="game.suggest" title="행동 제안 받기">
             💡 제안
           </button>
           <input
             id="actionInput"
             type="text"
+            data-i18n-ph="game.inputPlaceholder"
             placeholder="행동을 서술하세요. 예: 고블린 뒤로 몰래 다가간다"
             autocomplete="off"
           />
-          <button type="submit" class="primary" id="sendBtn">전송</button>
+          <button type="submit" class="primary" id="sendBtn" data-i18n="game.send">전송</button>
         </form>
       </main>
 
       <aside class="status-pane">
-        <h2 id="charTitle">캐릭터</h2>
+        <h2 id="charTitle" data-i18n="game.charTitle">캐릭터</h2>
 
         <div class="level-row">
           <span class="level-badge">Lv <span id="levelText">1</span></span>
@@ -131,15 +134,15 @@
 
         <div class="weapon-box hidden" id="weaponBox"></div>
 
-        <div class="coin-row"><span class="coin-label">💰 소지금</span><b id="coinText">0</b></div>
+        <div class="coin-row"><span class="coin-label" data-i18n="game.coin">💰 소지금</span><b id="coinText">0</b></div>
 
-        <h3>능력치</h3>
+        <h3 data-i18n="sheet.stats">능력치</h3>
         <div id="stats" class="stats-grid"></div>
 
-        <h3>인벤토리</h3>
+        <h3 data-i18n="game.inventory">인벤토리</h3>
         <ul id="inventory" class="inventory"></ul>
 
-        <h3>습득 무브</h3>
+        <h3 data-i18n="game.moves">습득 무브</h3>
         <ul id="moves" class="moves"></ul>
 
         <div class="model-note" id="modelNote"></div>
@@ -149,20 +152,21 @@
     <!-- 레벨업 선택 모달 -->
     <div id="levelupModal" class="modal-overlay hidden">
       <div class="modal-card">
-        <h2>⭐ 레벨업!</h2>
-        <p class="modal-sub">성장 방향을 선택하세요.</p>
+        <h2 data-i18n="lu.title">⭐ 레벨업!</h2>
+        <p class="modal-sub" data-i18n="lu.sub">성장 방향을 선택하세요.</p>
 
-        <h3>능력치 +1</h3>
+        <h3 data-i18n="lu.stat">능력치 +1</h3>
         <div id="luStats" class="lu-stats"></div>
 
-        <h3>새 무브 습득</h3>
+        <h3 data-i18n="lu.move">새 무브 습득</h3>
         <div id="luMoves" class="lu-moves"></div>
 
-        <button id="luConfirm" class="primary" disabled>선택 확정</button>
+        <button id="luConfirm" class="primary" disabled data-i18n="lu.confirm">선택 확정</button>
       </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/i18n.js"></script>
     <script src="/common.js"></script>
     <script src="/play.js"></script>
   </body>

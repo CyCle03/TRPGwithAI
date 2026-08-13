@@ -97,6 +97,14 @@ const TIER_LABEL = {
   miss: '실패와 악화 (6-)',
 };
 
+/** 영어로 진행하는 게임의 구간 이름. 판정 자체는 언어와 무관하다. */
+const TIER_LABEL_EN = {
+  strong: 'full success (10+)',
+  weak: 'success at a cost (7-9)',
+  miss: 'failure, and it gets worse (6-)',
+};
+const tierLabel = (tier, lang) => (lang === 'en' ? TIER_LABEL_EN : TIER_LABEL)[tier];
+
 /**
  * 무브 판정을 수행한다. 반드시 서버에서 호출.
  * @param {string} stat  능력치 키 (STR..CHA). 유효하지 않으면 보정 0.
@@ -122,10 +130,10 @@ function resolveMove(stat, character) {
 }
 
 /** 판정 결과를 로그/서사용 한 줄 문자열로 포맷. 예: 🎲 2d6+1 = [4,5]+1 = 10 → 완전 성공 (10+) */
-function formatRoll(result) {
+function formatRoll(result, lang) {
   const sign = result.mod >= 0 ? `+${result.mod}` : `${result.mod}`;
   const statPart = result.stat ? ` (${result.stat})` : '';
-  return `🎲 2d6${sign}${statPart} = [${result.dice.join(',')}]${sign} = ${result.total} → ${result.tierLabel}`;
+  return `🎲 2d6${sign}${statPart} = [${result.dice.join(',')}]${sign} = ${result.total} → ${tierLabel(result.tier, lang)}`;
 }
 
 /**
@@ -183,23 +191,36 @@ function applyStateUpdate(character, action) {
 }
 
 /** 적용된 상태 변경을 사람이 읽을 로그 문자열로. 변경 없으면 null. */
-function formatStateChange(applied) {
+function formatStateChange(applied, lang) {
+  const en = lang === 'en';
   const parts = [];
   if (applied.rawDamage != null) {
     // 피해: 방어구 차감 계산을 투명하게 표시
     if (applied.hpDelta < 0) {
-      parts.push(`HP ${applied.hpDelta} (피해 ${applied.rawDamage} − 방어구 ${applied.armorBlocked})`);
+      parts.push(
+        en
+          ? `HP ${applied.hpDelta} (damage ${applied.rawDamage} − armor ${applied.armorBlocked})`
+          : `HP ${applied.hpDelta} (피해 ${applied.rawDamage} − 방어구 ${applied.armorBlocked})`
+      );
     } else {
-      parts.push(`방어구가 피해 ${applied.rawDamage}을(를) 모두 막음`);
+      parts.push(
+        en
+          ? `armor absorbed all ${applied.rawDamage} damage`
+          : `방어구가 피해 ${applied.rawDamage}을(를) 모두 막음`
+      );
     }
   } else if (applied.hpDelta > 0) {
-    parts.push(`HP +${applied.hpDelta} (회복)`);
+    parts.push(en ? `HP +${applied.hpDelta} (healed)` : `HP +${applied.hpDelta} (회복)`);
   }
   if (applied.coinDelta) {
     parts.push(applied.coinDelta > 0 ? `💰 +${applied.coinDelta} coin` : `💰 ${applied.coinDelta} coin`);
   }
-  if (applied.added.length) parts.push(`획득: ${applied.added.join(', ')}`);
-  if (applied.removed.length) parts.push(`소모: ${applied.removed.join(', ')}`);
+  if (applied.added.length) {
+    parts.push((en ? 'gained: ' : '획득: ') + applied.added.join(', '));
+  }
+  if (applied.removed.length) {
+    parts.push((en ? 'used: ' : '소모: ') + applied.removed.join(', '));
+  }
   return parts.length ? `📋 ${parts.join(' · ')}` : null;
 }
 
@@ -217,4 +238,5 @@ module.exports = {
   formatStateChange,
   normalizeInventory,
   TIER_LABEL,
+  tierLabel,
 };

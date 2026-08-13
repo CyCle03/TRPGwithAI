@@ -1,10 +1,23 @@
-/* global App */
+/* global App, I18N */
 'use strict';
 
 /**
  * 던전 월드(AI GM) 페이지 — 캐릭터 생성 위저드 + 게임 화면.
  * 계정·설정·모델 모달은 common.js(App)가 담당한다.
+ *
+ * 클래스·장비·무브 이름은 서버가 한국어 원문으로 내려준다(세이브에도 그대로 들어간다).
+ * 화면에 낼 때만 dw() 로 사전을 찾고, 번역이 없으면 원문이 그대로 나온다.
  */
+
+const t = I18N.t;
+
+// 클래스·장비·무브의 영어 표시명 대응표. 서버가 init 으로 내려준다(dungeonWorldEn.js).
+let dwEn = {};
+
+/** 던전 월드 데이터의 표시명. 대응표에 없으면 서버가 준 한국어 원문 그대로. */
+function dw(name) {
+  return I18N.lang === 'en' ? dwEn[name] || name : name;
+}
 
 let socket = null;
 
@@ -78,6 +91,12 @@ let customStats = null; // {STR:.., ...}
 let selectedGearChoices = {}; // { groupId: optionId } 무기/방어구/장비 선택
 const TOTAL_STEPS = 4;
 let prevHp = null; // HP 변화 애니메이션용
+// 언어 전환 때 다시 그리려고 마지막으로 받은 값을 들고 있는다.
+// 로그(서사)는 다시 그리지 않는다 — AI가 그 대화의 언어로 이미 쓴 원문이다.
+let lastCharacter = null;
+let lastEnemies = [];
+let lastCompanions = [];
+let lastSlots = null;
 
 let luAbility = null; // 선택한 능력치 key
 let luMove = null; // 선택한 무브 id
@@ -90,6 +109,7 @@ const escapeHtml = App.escapeHtml;
 function wireSocket(s) {
   s.on('init', (data) => {
     classesData = data.classes || [];
+    dwEn = data.dwEn || {};
     if (Array.isArray(data.statKeys)) statKeys = data.statKeys;
     if (Array.isArray(data.standardArray)) standardArray = data.standardArray;
     renderClasses(classesData);
@@ -130,7 +150,7 @@ function wireSocket(s) {
   );
   s.on('gmThinking', ({ on }) => {
     thinkingEl.classList.toggle('hidden', !on);
-    if (on) App.startThinking(thinkingEl, 'GM이 이야기를 짜는 중', currentGameAi.provider);
+    if (on) App.startThinking(thinkingEl, t('game.thinking'), currentGameAi.provider);
     else App.stopThinking();
     setBusy(on);
   });
@@ -149,7 +169,7 @@ function wireSocket(s) {
 
 function updateModelNote() {
   const prov = currentGameAi.provider || 'gemini';
-  const warn = App.providerReady(prov) ? '' : prov === 'free' ? ' · ⚠ 중단됨' : ' · ⚠ 키 미등록';
+  const warn = App.providerReady(prov) ? '' : prov === 'free' ? t('game.stopped') : t('game.noKey');
   modelNote.textContent = App.modelLabel(currentGameAi) + warn;
 }
 
@@ -188,18 +208,19 @@ function applyGameState(data) {
 
 /** 슬롯 칩들을 렌더. */
 function renderSlots(data) {
+  if (data) lastSlots = data;
   if (!data || !slotBarEl) return;
   slotBarEl.innerHTML = '';
   (data.slots || []).forEach((s) => {
     const chip = document.createElement('div');
     chip.className = 'slot-chip' + (s.id === data.activeId ? ' active' : '');
     const label = s.hasCharacter
-      ? `${s.name || '모험가'}${s.dead ? ' ☠️' : ''} · ${s.className || ''} Lv${s.level || 1}`
-      : '빈 슬롯 (새 모험)';
+      ? `${s.name || t('game.adventurer')}${s.dead ? ' ☠️' : ''} · ${dw(s.className || '')} Lv${s.level || 1}`
+      : t('game.slotEmpty');
     const btn = document.createElement('button');
     btn.className = 'slot-main';
     btn.textContent = label;
-    btn.title = '이 게임으로 전환';
+    btn.title = t('game.slotSwitch');
     btn.addEventListener('click', () => {
       if (s.id !== data.activeId) socket.emit('switchSlot', { id: s.id });
     });
@@ -209,11 +230,11 @@ function renderSlots(data) {
       const del = document.createElement('button');
       del.className = 'slot-del';
       del.textContent = '✕';
-      del.title = '이 게임 삭제';
+      del.title = t('game.slotDelete');
       del.addEventListener('click', (e) => {
         e.stopPropagation();
-        const nm = s.hasCharacter ? `"${s.name || '이 게임'}"` : '이 빈 슬롯';
-        if (confirm(`${nm}을(를) 삭제할까요? 되돌릴 수 없습니다.`)) socket.emit('deleteSlot', { id: s.id });
+        const nm = s.hasCharacter ? `"${s.name || t('game.slotThis')}"` : t('game.slotThisEmpty');
+        if (confirm(t('game.slotDeleteAsk', { name: nm }))) socket.emit('deleteSlot', { id: s.id });
       });
       chip.appendChild(del);
     }
@@ -222,7 +243,7 @@ function renderSlots(data) {
   // 새 게임 버튼 활성/비활성 (최대치)
   const full = (data.slots || []).length >= (data.max || 3);
   newGameBtn.disabled = full;
-  newGameBtn.title = full ? `게임은 최대 ${data.max || 3}개까지 저장됩니다` : '새 게임 슬롯 만들기';
+  newGameBtn.title = full ? t('game.slotMax', { max: data.max || 3 }) : t('game.newGameTitle');
 }
 
 // ---------- 화면 전환 ----------
@@ -266,11 +287,11 @@ function renderClasses(classes) {
     const statLine = statKeys
       .map((k) => `${k} ${fmtMod(c.stats[k])}`)
       .join('  ');
-    const moveNames = (c.moves || []).map((m) => m.name).join(', ');
-    div.innerHTML = `<div class="cname">${c.name}</div>
-      <div class="cdesc">${c.description}</div>
-      <div class="cstats">HP ${c.maxHp} · 피해 d${c.damageDie} · ${statLine}</div>
-      <div class="cmoves">배울 기술: ${moveNames}</div>`;
+    const moveNames = (c.moves || []).map((m) => dw(m.name)).join(', ');
+    div.innerHTML = `<div class="cname">${escapeHtml(dw(c.name))}</div>
+      <div class="cdesc">${escapeHtml(dw(c.description))}</div>
+      <div class="cstats">HP ${c.maxHp} · ${t('sheet.damage')} d${c.damageDie} · ${statLine}</div>
+      <div class="cmoves">${t('sheet.learnMoves')}: ${escapeHtml(moveNames)}</div>`;
     div.addEventListener('click', () => {
       document
         .querySelectorAll('.class-card')
@@ -337,8 +358,10 @@ function renderGear() {
     if (!selectedGearChoices[g.id]) selectedGearChoices[g.id] = g.options[0].id;
   });
 
-  baseGearEl.innerHTML = `<span class="bg-label">기본 장비:</span> ${cls.baseGear.join(', ')}`;
-  gearHintEl.textContent = '무기·방어구·추가 장비를 하나씩 고르세요. 방어구 선택에 따라 방어력이 달라집니다.';
+  baseGearEl.innerHTML = t('play.baseGear', {
+    list: escapeHtml(cls.baseGear.map(dw).join(', ')),
+  });
+  gearHintEl.textContent = t('play.gearPickHint');
   gearCountEl.textContent = '';
 
   gearOptionsEl.innerHTML = '';
@@ -347,7 +370,7 @@ function renderGear() {
     wrap.className = 'gear-group';
     const title = document.createElement('div');
     title.className = 'gear-group-title';
-    title.textContent = group.label;
+    title.textContent = dw(group.label);
     wrap.appendChild(title);
     const opts = document.createElement('div');
     opts.className = 'gear-group-opts';
@@ -357,9 +380,9 @@ function renderGear() {
       chip.className = 'gear-chip' + (picked ? ' selected' : '');
       const tagHtml =
         o.tags && o.tags.length
-          ? `<div class="gear-tags">${o.tags.map(escapeHtml).join(' · ')}</div>`
+          ? `<div class="gear-tags">${o.tags.map((x) => escapeHtml(dw(x))).join(' · ')}</div>`
           : '';
-      chip.innerHTML = escapeHtml(o.name) + tagHtml;
+      chip.innerHTML = escapeHtml(dw(o.name)) + tagHtml;
       chip.addEventListener('click', () => {
         selectedGearChoices[group.id] = o.id;
         renderGear();
@@ -374,7 +397,7 @@ function renderGear() {
   // 현재 방어력 미리보기
   const armorNote = document.createElement('div');
   armorNote.className = 'gear-armor-note';
-  armorNote.textContent = `현재 방어력: ${computeArmor(cls)}`;
+  armorNote.textContent = t('play.currentArmor', { n: computeArmor(cls) });
   gearOptionsEl.appendChild(armorNote);
 
   // 배울 수 있는 기술
@@ -382,7 +405,7 @@ function renderGear() {
   (cls.moves || []).forEach((m) => {
     const div = document.createElement('div');
     div.className = 'learn-move';
-    div.innerHTML = `<div class="lm-name">${m.name}</div><div class="lm-desc">${m.desc}</div>`;
+    div.innerHTML = `<div class="lm-name">${escapeHtml(dw(m.name))}</div><div class="lm-desc">${escapeHtml(dw(m.desc))}</div>`;
     learnMovesEl.appendChild(div);
   });
 }
@@ -397,7 +420,7 @@ function renderStatAssign() {
 
   if (recommend) {
     statHintEl.classList.remove('error');
-    statHintEl.textContent = `${cls.name}의 추천 능력치입니다.`;
+    statHintEl.textContent = t('play.recommendHint', { cls: dw(cls.name) });
     statAssignEl.innerHTML = '';
     statKeys.forEach((k) => {
       const row = document.createElement('div');
@@ -450,14 +473,14 @@ function updateCustomHint() {
   statKeys.forEach((k) => (have[customStats[k]] = (have[customStats[k]] || 0) + 1));
   if (isCustomValid()) {
     statHintEl.classList.remove('error');
-    statHintEl.textContent = '유효한 배치입니다. (표준 배열 사용)';
+    statHintEl.textContent = t('play.customOk');
   } else {
     const parts = Object.keys(need)
       .sort((a, b) => b - a)
       .map((v) => `${fmtMod(Number(v))}×${need[v]}`)
       .join(', ');
     statHintEl.classList.add('error');
-    statHintEl.textContent = `표준 배열을 정확히 사용하세요: ${parts}`;
+    statHintEl.textContent = t('play.customBad', { parts });
   }
 }
 
@@ -481,24 +504,24 @@ function renderSheetSummary() {
   const chosenNames = (cls.gearChoices || [])
     .map((g) => g.options.find((o) => o.id === selectedGearChoices[g.id]))
     .filter(Boolean)
-    .map((o) => o.name);
-  const allGear = [...cls.baseGear, ...chosenNames];
-  const moveNames = (cls.moves || []).map((m) => m.name).join(', ');
+    .map((o) => dw(o.name));
+  const allGear = [...cls.baseGear.map(dw), ...chosenNames];
+  const moveNames = (cls.moves || []).map((m) => dw(m.name)).join(', ');
   const weaponGroup = (cls.gearChoices || []).find((g) => g.id === 'weapon');
   const weaponOpt = weaponGroup
     ? weaponGroup.options.find((o) => o.id === selectedGearChoices.weapon)
     : null;
   const weaponLine =
     weaponOpt && weaponOpt.tags && weaponOpt.tags.length
-      ? `<div><span class="lbl">무기 태그</span> ${weaponOpt.tags.join(' · ')}</div>`
+      ? `<div><span class="lbl">${t('sheet.weaponTags')}</span> ${weaponOpt.tags.map((x) => escapeHtml(dw(x))).join(' · ')}</div>`
       : '';
   sheetSummaryEl.innerHTML =
-    `<div><span class="lbl">클래스</span> ${cls.name}</div>` +
-    `<div><span class="lbl">HP</span> ${cls.maxHp} · <span class="lbl">방어구</span> ${computeArmor(cls)} · <span class="lbl">피해</span> d${cls.damageDie}</div>` +
-    `<div><span class="lbl">능력치</span> ${statLine}</div>` +
-    `<div><span class="lbl">장비</span> ${allGear.join(', ')}</div>` +
+    `<div><span class="lbl">${t('sheet.class')}</span> ${escapeHtml(dw(cls.name))}</div>` +
+    `<div><span class="lbl">${t('sheet.hp')}</span> ${cls.maxHp} · <span class="lbl">${t('sheet.armor')}</span> ${computeArmor(cls)} · <span class="lbl">${t('sheet.damage')}</span> d${cls.damageDie}</div>` +
+    `<div><span class="lbl">${t('sheet.stats')}</span> ${statLine}</div>` +
+    `<div><span class="lbl">${t('sheet.gear')}</span> ${escapeHtml(allGear.join(', '))}</div>` +
     weaponLine +
-    `<div><span class="lbl">배울 기술</span> ${moveNames}</div>`;
+    `<div><span class="lbl">${t('sheet.learnMoves')}</span> ${escapeHtml(moveNames)}</div>`;
 }
 
 // --- 네비게이션 ---
@@ -572,10 +595,10 @@ function setGameOver(on) {
   suggestBtn.disabled = on;
   actionInput.disabled = on;
   if (on) {
-    actionInput.placeholder = '캐릭터가 사망했습니다 — 새 게임으로 새 모험을 시작하세요.';
+    actionInput.placeholder = t('game.dead');
     newGameBtn.classList.add('pulse');
   } else {
-    actionInput.placeholder = '행동을 서술하세요. 예: 고블린 뒤로 몰래 다가간다';
+    actionInput.placeholder = t('game.inputPlaceholder');
     newGameBtn.classList.remove('pulse');
   }
 }
@@ -654,7 +677,7 @@ function animateDiceRoll(entry) {
   div.className = 'entry dice rolling';
   div.innerHTML =
     '<div class="dice-faces"><span class="die">⚂</span><span class="die">⚄</span></div>' +
-    '<div class="dice-caption">주사위를 굴리는 중…</div>';
+    `<div class="dice-caption">${t('game.rolling')}</div>`;
   logInnerEl.appendChild(div);
   scrollLog();
   const faces = div.querySelectorAll('.die');
@@ -682,8 +705,10 @@ function animateDiceRoll(entry) {
 
 // ---------- 적/동료 필드 ----------
 function renderField(enemies, companions) {
-  renderNpcList(enemiesEl, enemies || [], 'enemy');
-  renderNpcList(companionsEl, companions || [], 'ally');
+  lastEnemies = enemies || [];
+  lastCompanions = companions || [];
+  renderNpcList(enemiesEl, lastEnemies, 'enemy');
+  renderNpcList(companionsEl, lastCompanions, 'ally');
 }
 
 function renderNpcList(el, list, kind) {
@@ -691,7 +716,7 @@ function renderNpcList(el, list, kind) {
   if (!list.length) {
     const d = document.createElement('div');
     d.className = 'empty';
-    d.textContent = kind === 'enemy' ? '(적 없음)' : '(동료 없음)';
+    d.textContent = kind === 'enemy' ? t('game.noEnemies') : t('game.noCompanions');
     el.appendChild(d);
     return;
   }
@@ -711,10 +736,11 @@ function scrollLog() {
 }
 
 function updateStatus(c) {
+  lastCharacter = c; // 언어를 바꾸면 이 값으로 상태 패널을 다시 그린다
   if (prevHp !== null && c.hp !== prevHp) flashHp(c.hp - prevHp);
   prevHp = c.hp;
 
-  charTitle.textContent = `${c.name} · ${c.className}`;
+  charTitle.textContent = `${c.name} · ${dw(c.className)}`;
 
   const level = c.level || 1;
   const xp = c.xp || 0;
@@ -726,14 +752,14 @@ function updateStatus(c) {
   hpText.textContent = `${c.hp}/${c.maxHp}`;
   const pct = c.maxHp > 0 ? Math.max(0, (c.hp / c.maxHp) * 100) : 0;
   hpBar.style.width = pct + '%';
-  armorText.textContent = `방어구 ${c.armor}`;
+  armorText.textContent = t('game.armorText', { n: c.armor });
 
   // 장착 무기 + 태그
   if (c.weapon && c.weapon.name) {
     const tags = (c.weapon.tags || []).length
-      ? `<span class="wb-tags">${c.weapon.tags.map(escapeHtml).join(' · ')}</span>`
+      ? `<span class="wb-tags">${c.weapon.tags.map((x) => escapeHtml(dw(x))).join(' · ')}</span>`
       : '';
-    weaponBoxEl.innerHTML = `<span class="wb-label">무기</span> ${escapeHtml(c.weapon.name)} ${tags}`;
+    weaponBoxEl.innerHTML = `<span class="wb-label">${t('game.weapon')}</span> ${escapeHtml(dw(c.weapon.name))} ${tags}`;
     weaponBoxEl.classList.remove('hidden');
   } else {
     weaponBoxEl.classList.add('hidden');
@@ -753,12 +779,12 @@ function updateStatus(c) {
   if (!c.inventory.length) {
     const li = document.createElement('li');
     li.className = 'empty';
-    li.textContent = '(비어 있음)';
+    li.textContent = t('common.empty');
     inventoryEl.appendChild(li);
   } else {
     c.inventory.forEach((item) => {
       const li = document.createElement('li');
-      li.textContent = item;
+      li.textContent = dw(item);
       inventoryEl.appendChild(li);
     });
   }
@@ -769,12 +795,12 @@ function updateStatus(c) {
   if (!moves.length) {
     const li = document.createElement('li');
     li.className = 'empty';
-    li.textContent = '(아직 없음)';
+    li.textContent = t('common.notYet');
     movesEl.appendChild(li);
   } else {
     moves.forEach((m) => {
       const li = document.createElement('li');
-      li.innerHTML = `<div class="mname">${m.name}</div><div class="mdesc">${m.desc}</div>`;
+      li.innerHTML = `<div class="mname">${escapeHtml(dw(m.name))}</div><div class="mdesc">${escapeHtml(dw(m.desc))}</div>`;
       movesEl.appendChild(li);
     });
   }
@@ -834,7 +860,7 @@ function openLevelUp(options) {
   if (!luNeedStat) {
     const note = document.createElement('div');
     note.style.cssText = 'color:var(--muted);font-size:0.82rem;grid-column:1/-1;';
-    note.textContent = '모든 능력치가 최대치입니다.';
+    note.textContent = t('lu.statMax');
     luStats.appendChild(note);
   }
 
@@ -843,13 +869,13 @@ function openLevelUp(options) {
   if (!luNeedMove) {
     const div = document.createElement('div');
     div.className = 'lu-move none';
-    div.textContent = '더 습득할 무브가 없습니다.';
+    div.textContent = t('lu.moveMax');
     luMoves.appendChild(div);
   } else {
     moves.forEach((m) => {
       const div = document.createElement('div');
       div.className = 'lu-move';
-      div.innerHTML = `<div class="mname">${m.name}</div><div class="mdesc">${m.desc}</div>`;
+      div.innerHTML = `<div class="mname">${escapeHtml(dw(m.name))}</div><div class="mdesc">${escapeHtml(dw(m.desc))}</div>`;
       div.addEventListener('click', () => {
         luMove = m.id;
         document
@@ -878,6 +904,27 @@ function closeLevelUp() {
 luConfirm.addEventListener('click', () => {
   luConfirm.disabled = true;
   socket.emit('levelUpChoice', { ability: luAbility, moveId: luMove });
+});
+
+/**
+ * 언어 전환. 스크립트가 그린 부분만 다시 그린다 —
+ * **로그(서사)는 건드리지 않는다.** AI 가 그 게임의 언어로 이미 쓴 원문이고,
+ * 서버에도 그대로 저장돼 있다.
+ */
+document.addEventListener('i18n:change', () => {
+  if (classesData.length) renderClasses(classesData);
+  if (selectedClass) {
+    if (currentStep === 2) renderStatAssign();
+    if (currentStep === 3) renderGear();
+    if (currentStep === 4) renderSheetSummary();
+  }
+  if (lastCharacter) updateStatus(lastCharacter);
+  renderNpcList(enemiesEl, lastEnemies, 'enemy');
+  renderNpcList(companionsEl, lastCompanions, 'ally');
+  setGameOver(gameOver);
+  updateModelNote();
+  updateGameModelLabel();
+  if (lastSlots) renderSlots(lastSlots);
 });
 
 // ---------- 부트 ----------

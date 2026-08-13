@@ -1,7 +1,8 @@
 'use strict';
 
-const { MOVES_SUMMARY } = require('./dungeonWorld');
+const { MOVES_SUMMARY, MOVES_SUMMARY_EN } = require('./dungeonWorld');
 const { ABILITIES } = require('./rulesEngine');
+const { DW_EN } = require('./dungeonWorldEn');
 
 /**
  * AI GM — 서사/연출/무브 판단 담당.
@@ -83,7 +84,7 @@ function defaultModel(name) {
 }
 
 // 정적 규칙/역할 지시 (매 턴 동일 — Claude에서는 프롬프트 캐시 대상).
-const STATIC_SYSTEM = `너는 1인용 던전 월드(PbtA) 게임의 게임 마스터(GM)다. 플레이어 한 명과 함께 짧은 판타지 모험을 진행한다.
+const STATIC_SYSTEM_KO = `너는 1인용 던전 월드(PbtA) 게임의 게임 마스터(GM)다. 플레이어 한 명과 함께 짧은 판타지 모험을 진행한다.
 
 [역할 분리 — 매우 중요]
 - 서사·장면 묘사·NPC 연출은 네가 담당한다.
@@ -147,10 +148,114 @@ ${MOVES_SUMMARY}
 
 응답은 반드시 지정된 JSON 스키마(narration + action)로만 출력하라.`;
 
-/** 현재 상태 요약 (동적) — GM이 맥락을 잃지 않도록. */
-function buildStateSummary(session) {
+
+// ── 영어로 진행하는 게임의 규칙 지시 ──
+// 한국어판과 같은 규칙을 담되, **무기 태그는 영어 이름**('precise', 'messy' …)으로 쓴다.
+// 상태 요약에서도 태그를 dungeonWorldEn.js 로 옮겨 보내므로 서로 맞는다.
+// 세이브에는 언제나 한국어 원문이 남는다 — 화면과 프롬프트만 언어를 탄다.
+const STATIC_SYSTEM_EN = `You are the game master (GM) of a solo Dungeon World (PbtA) game, running a short fantasy adventure with one player.
+
+[Division of labor — very important]
+- Narration, scene description and NPC performance are yours.
+- Dice, arithmetic and state (HP, inventory) are NEVER yours. The system (code) owns them.
+- When a roll is needed, only *request* it with action.type="roll". The system rolls and tells you the result.
+- When state must change (damage, healing, gaining or spending items), request it with action.type="update_state". The system validates and applies it.
+- Never invent a number in your prose, such as "the dice came up 10".
+
+[Judging moves]
+- Interpret the player's free-form description as one of the moves below, and decide which stat applies.
+- For pure conversation, movement or description that needs no roll, use action.type="none".
+
+[Narrating roll results]
+- When the system reports a result (strong=10+, weak=7-9, miss=6-), write prose that matches it.
+  - 10+ : it goes as intended.
+  - 7-9 : success, but with a cost, complication or hard choice.
+  - 6-  : failure, and the situation worsens (your chance to make a hard move).
+- When damage happens, include action.type="update_state" with a negative hpDelta. Put the **raw damage before armor** there as a negative number. The system subtracts the character's armor automatically and shows the arithmetic (damage X − armor Y) on screen. Scale damage to the threat, usually 2 to 8. Healing is applied as-is, ignoring armor.
+
+[Experience — be strict]
+- A 6- on a roll already grants XP automatically. Never add xpGain on top of it (no double-dipping).
+- Give xpGain **rarely**. Only for major story beats, xpGain=1:
+  · defeating a named or powerful (boss-tier) enemy
+  · achieving a core goal of the adventure
+  · making a discovery that reshapes the story
+- Never give xpGain (it must be 0) for: ordinary attacks or defenses, taking or healing damage, minor successes, failures, plain movement or conversation, killing one mook. Most turns are xpGain=0.
+
+[Enemies and allies — shown in the left panel]
+- When the scene has enemies or companion NPCs, put the **complete current list** in action.enemies / action.companions.
+- Each entry: name, hp (a health description — e.g. "healthy", "wounded", "dying", "3/6"), note (a short trait or armament).
+- Only resend the full list when it changes (appearing, defeated, joining, leaving, wounded). With no change, leave it null and the system keeps the previous list.
+- Drop defeated enemies from the list; when all enemies are gone, send an empty array []. Remove companions who leave.
+
+[Tone]
+- Write in English, immersively. Keep each reply to about 2-4 sentences. End with a question or an opening that invites the player's next action.
+
+[Weapon tags — Dungeon World rules, always apply them]
+The character's equipped weapon carries tags (shown in the state block). The damage die comes from the class and the weapon does not change it. Instead, apply the tags to rolls and prose:
+- 'precise': attacking in melee with this weapon rolls DEX instead of STR for Hack and Slash (action.stat="DEX").
+- 'far'/'near': a ranged weapon. Distant enemies are attacked with Volley (DEX). Conversely, a melee-only weapon cannot reach a distant enemy — the character must close first.
+- 'reach': can strike an enemy a step away (an advantage against melee-only opponents).
+- 'hand'/'close': must be right up against the target.
+- 'forceful': on a success, can shove or knock the enemy down.
+- 'messy': wounds are large and brutal (damage runs a little high).
+- '+N damage': add N to the raw hpDelta in update_state.
+- 'two-handed'/'reload'/'slow': reflect as narrative constraints (a reload weapon cannot fire twice in a row, etc.).
+
+[Camping and rest — Make Camp]
+- When the player camps, rests or sleeps somewhere safe, narrate it and restore HP with action.type="update_state" (positive hpDelta). Usually about half of max HP, less in a dangerous place. Healing ignores armor.
+- Camping consumes food: if the inventory holds rations, remove one with removeItems. With no food, cut the healing sharply and put the danger of hunger into the prose.
+
+[Last Breath — handled by the system]
+- When HP reaches 0 the system rolls Last Breath (2d6) automatically and reports the result to you as a [system] message. Write only the prose that follows its instruction; never decide HP or life and death yourself (the system already has).
+
+[Coin]
+- The character's money is an integer (coin) managed by the system (shown in the state block). When money is gained or spent, put coinDelta in action.type="update_state" (positive to gain, negative to spend).
+- Never put vague amounts like "a few silver" into addItems. Always use a concrete number in coinDelta (e.g. 15 silver from a hoard → coinDelta=15).
+- To give several of the same consumable, repeat the name in addItems (e.g. 5 arrows → ["arrow","arrow","arrow","arrow","arrow"]). The system merges them into a quantity.
+
+${MOVES_SUMMARY_EN}
+
+Output only the specified JSON schema (narration + action).`;
+
+/** 던전 월드 데이터의 영어 표시명. 표에 없으면 원문 그대로. */
+function en(name) {
+  return DW_EN[name] || name;
+}
+
+/**
+ * 현재 상태 요약 (동적) — GM이 맥락을 잃지 않도록.
+ *
+ * 영어로 진행하는 게임에서는 클래스·무기·태그·아이템·무브를 **영어 표시명으로 옮겨**
+ * 보낸다. 그래야 모델이 매 턴 자기 나름대로 옮기지 않고, 고유명사가 흔들리지 않는다.
+ * 캐릭터에 저장된 값 자체는 그대로 한국어다.
+ */
+function buildStateSummary(session, lang) {
   const c = session.character;
   const statLine = ABILITIES.map((k) => `${k} ${fmtMod(c.stats[k])}`).join(' ');
+  if (lang === 'en') {
+    const moveLine = (c.moves || []).length
+      ? c.moves.map((m) => `${en(m.name)}(${en(m.desc)})`).join(' / ')
+      : '(none)';
+    return `[Current character state — the real numbers, owned by the system]
+Name: ${c.name} / Class: ${en(c.className)} / Level: ${c.level || 1}
+HP: ${c.hp}/${c.maxHp}  Armor: ${c.armor}  Damage die: d${c.damageDie}
+Equipped weapon: ${
+      c.weapon
+        ? `${en(c.weapon.name)} [${(c.weapon.tags || []).map(en).join(', ') || 'no tags'}]`
+        : '(bare hands)'
+    }
+Stats: ${statLine}
+Coin: ${c.coin || 0}
+Inventory: ${c.inventory.length ? c.inventory.map(en).join(', ') : '(empty)'}
+Moves learned: ${moveLine}
+
+[The field — enemies and allies tracked by the system]
+Enemies: ${fmtNpcs(session.enemies, lang)}
+Allies: ${fmtNpcs(session.companions, lang)}
+
+[Story so far]
+${session.summary || '(the adventure has just begun)'}`;
+  }
   const moveLine = (c.moves || []).length
     ? c.moves.map((m) => `${m.name}(${m.desc})`).join(' / ')
     : '(없음)';
@@ -171,12 +276,22 @@ HP: ${c.hp}/${c.maxHp}  방어구: ${c.armor}  피해주사위: d${c.damageDie}
 ${session.summary || '(모험 시작 직후)'}`;
 }
 
+/** 게임에 고정된 응답 언어. */
+function normalizeLang(v) {
+  return v === 'en' ? 'en' : 'ko';
+}
+
+/** 게임 언어에 맞는 정적 규칙 지시. */
+function staticSystemFor(lang) {
+  return lang === 'en' ? STATIC_SYSTEM_EN : STATIC_SYSTEM_KO;
+}
+
 function fmtMod(m) {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-function fmtNpcs(list) {
-  if (!Array.isArray(list) || !list.length) return '(없음)';
+function fmtNpcs(list, lang) {
+  if (!Array.isArray(list) || !list.length) return lang === 'en' ? '(none)' : '(없음)';
   return list.map((n) => `${n.name}(${n.hp || '?'}${n.note ? ', ' + n.note : ''})`).join('; ');
 }
 
@@ -187,12 +302,14 @@ function fmtNpcs(list) {
  */
 async function callGM(session, messages) {
   const cfg = session.aiConfig || {};
+  // 언어는 게임을 만들 때 정해져 세션에 붙는다 — 진행 중에 바뀌지 않는다.
+  const lang = normalizeLang(session.lang);
   const jsonText = await pickProvider(cfg.provider).generate({
     apiKey: cfg.apiKey,
     model: cfg.model,
     baseURL: cfg.baseURL,
-    staticSystem: STATIC_SYSTEM,
-    dynamicSystem: buildStateSummary(session),
+    staticSystem: staticSystemFor(lang),
+    dynamicSystem: buildStateSummary(session, lang),
     messages,
   });
 
@@ -206,11 +323,22 @@ async function callGM(session, messages) {
 }
 
 // 행동 제안용 지시 프롬프트 (GM 스키마와 별개, 이야기 진행 없음).
-const SUGGEST_SYSTEM = `너는 던전 월드 GM의 보조다. 현재 장면과 캐릭터 상태를 바탕으로, 플레이어가 지금 취할 만한 서로 다른 행동 3가지를 제안하라.
+const SUGGEST_SYSTEM_KO = `너는 던전 월드 GM의 보조다. 현재 장면과 캐릭터 상태를 바탕으로, 플레이어가 지금 취할 만한 서로 다른 행동 3가지를 제안하라.
 - 각 제안은 한국어로 12자~30자 내외의 구체적인 행동 서술("~한다" 형태).
 - 캐릭터의 클래스·능력치·습득 무브를 활용하는 선택지를 섞어라.
 - 안전한 선택과 과감한 선택을 다양하게. 스토리를 대신 진행하지 말고, 선택지만 제시하라.
 JSON 문자열 배열로만 출력하라.`;
+
+const SUGGEST_SYSTEM_EN = `You assist the Dungeon World GM. Based on the current scene and character state, propose 3 distinct actions the player could take right now.
+- Each suggestion is a concrete action in English, roughly 5 to 12 words, phrased as an action the character takes.
+- Mix in options that use the character's class, stats and learned moves.
+- Vary between safe and bold choices. Do not advance the story — only offer the options.
+Output a JSON array of strings and nothing else.`;
+
+const SUGGEST_ASK = {
+  ko: '지금 상황에서 내가 취할 만한 행동 몇 가지를 제안해줘.',
+  en: 'Suggest a few actions I could take in this situation.',
+};
 
 /**
  * 현재 상황에서 취할 만한 행동 제안 목록을 받아온다.
@@ -218,16 +346,15 @@ JSON 문자열 배열로만 출력하라.`;
  */
 async function suggestGmActions(session, messages) {
   const cfg = session.aiConfig || {};
+  const lang = normalizeLang(session.lang);
   // 대화가 GM(model) 턴으로 끝나면 Gemini가 400을 낸다 → user 턴을 덧붙여 요청을 마무리.
-  const msgs = messages.concat([
-    { role: 'user', content: '지금 상황에서 내가 취할 만한 행동 몇 가지를 제안해줘.' },
-  ]);
+  const msgs = messages.concat([{ role: 'user', content: SUGGEST_ASK[lang] }]);
   const jsonText = await pickProvider(cfg.provider).generateSuggestions({
     apiKey: cfg.apiKey,
     model: cfg.model,
     baseURL: cfg.baseURL,
-    staticSystem: SUGGEST_SYSTEM,
-    dynamicSystem: buildStateSummary(session),
+    staticSystem: lang === 'en' ? SUGGEST_SYSTEM_EN : SUGGEST_SYSTEM_KO,
+    dynamicSystem: buildStateSummary(session, lang),
     messages: msgs,
   });
   let arr;
@@ -348,6 +475,7 @@ async function testModel(cfg) {
 module.exports = {
   callGM,
   suggestGmActions,
+  normalizeLang,
   chatReply,
   chatReplyStream,
   canStream,

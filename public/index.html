@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ko">
+<!-- lang 속성과 <title> 은 i18n.js 가 현재 언어로 덮어쓴다. -->
+<html lang="ko" data-i18n-doctitle="meta.title.landing">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,18 +13,18 @@
     <!-- 로그인 / 회원가입 -->
     <div id="auth" class="setup hidden">
       <div class="setup-card auth-card">
-        <h1>🎲 AI GM 솔로 던전 월드</h1>
+        <h1 data-i18n="auth.title">🎲 AI GM 솔로 던전 월드</h1>
         <p class="subtitle" id="authSubtitle">로그인하고 모험을 시작하세요</p>
-        <label>아이디</label>
-        <input id="authUser" type="text" placeholder="영문/숫자/밑줄 3~20자" maxlength="20" autocomplete="username" />
-        <label>비밀번호</label>
-        <input id="authPass" type="password" placeholder="6자 이상" autocomplete="current-password" />
+        <label data-i18n="auth.id">아이디</label>
+        <input id="authUser" type="text" data-i18n-ph="auth.idPlaceholder" placeholder="영문/숫자/밑줄 3~20자" maxlength="20" autocomplete="username" />
+        <label data-i18n="auth.pw">비밀번호</label>
+        <input id="authPass" type="password" data-i18n-ph="auth.pwPlaceholder" placeholder="6자 이상" autocomplete="current-password" />
         <!-- 가입할 때만 보인다(landing.js 가 토글).
              만 14세 미만은 법정대리인 동의 없이 가입시킬 수 없다(개인정보 보호법 제22조의2). -->
         <div id="authTerms" class="auth-terms hidden">
           <label class="auth-check">
             <input id="authAge" type="checkbox" />
-            <span>만 14세 이상이며,
+            <span data-i18n-html="auth.consent">만 14세 이상이며,
               <a href="https://elcherlab.com/terms.html" target="_blank" rel="noopener">이용약관</a>과
               <a href="https://elcherlab.com/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에
               동의합니다.</span>
@@ -36,9 +37,9 @@
           <a id="authSwitch" href="#">회원가입</a>
         </p>
         <p class="auth-legal">
-          <a href="https://elcherlab.com/terms.html" target="_blank" rel="noopener">이용약관</a>
-          · <a href="https://elcherlab.com/privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
-          · <a href="https://auth.elcherlab.com/account" target="_blank" rel="noopener">내 계정</a>
+          <a href="https://elcherlab.com/terms.html" target="_blank" rel="noopener" data-i18n="auth.terms">이용약관</a>
+          · <a href="https://elcherlab.com/privacy.html" target="_blank" rel="noopener" data-i18n="auth.privacy">개인정보처리방침</a>
+          · <a href="https://auth.elcherlab.com/account" target="_blank" rel="noopener" data-i18n="auth.myAccount">내 계정</a>
         </p>
       </div>
     </div>
@@ -46,23 +47,24 @@
     <!-- 홈: 모드 선택 (로그인 후 항상 여기서 시작) -->
     <div id="home" class="setup hidden">
       <div class="setup-card">
-        <h1>🎲 AI GM</h1>
-        <p class="subtitle">무엇을 하시겠어요?</p>
+        <h1 data-i18n="home.title">🎲 AI GM</h1>
+        <p class="subtitle" data-i18n="home.subtitle">무엇을 하시겠어요?</p>
         <div class="home-choices">
           <button id="homeGameBtn" class="home-card">
             <span class="hc-icon">🎲</span>
-            <span class="hc-title">던전 월드</span>
-            <span class="hc-desc">AI가 게임 마스터를 맡는 1인용 TRPG. 주사위·HP·아이템을 규칙대로 관리합니다.</span>
+            <span class="hc-title" data-i18n="home.game">던전 월드</span>
+            <span class="hc-desc" data-i18n="home.gameDesc">AI가 게임 마스터를 맡는 1인용 TRPG. 주사위·HP·아이템을 규칙대로 관리합니다.</span>
           </button>
           <button id="homeChatBtn" class="home-card">
             <span class="hc-icon">💬</span>
-            <span class="hc-title">캐릭터 챗</span>
-            <span class="hc-desc">세계관과 캐릭터를 직접 만들어 자유롭게 대화. 갤러리에서 남의 세계관도 플레이.</span>
+            <span class="hc-title" data-i18n="home.chat">캐릭터 챗</span>
+            <span class="hc-desc" data-i18n="home.chatDesc">세계관과 캐릭터를 직접 만들어 자유롭게 대화. 갤러리에서 남의 세계관도 플레이.</span>
           </button>
         </div>
       </div>
     </div>
 
+    <script src="/i18n.js"></script>
     <script src="/common.js"></script>
     <script src="/landing.js"></script>
   </body>

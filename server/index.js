@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 
 const { GameSession } = require('./gameSession');
 const { listClasses, STANDARD_ARRAY, STAT_KEYS } = require('./dungeonWorld');
+const { DW_EN } = require('./dungeonWorldEn');
 const aiGM = require('./aiGM');
 const auth = require('./auth');
 const store = require('./store');
@@ -18,6 +19,7 @@ const uploads = require('./uploads');
 const publish = require('./publish');
 const purge = require('./purge');
 const metrics = require('./metrics');
+const messages = require('./messages');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
@@ -33,6 +35,23 @@ const AUTH_ORIGIN = process.env.AUTH_ORIGIN || 'https://auth.elcherlab.com';
 
 const app = express();
 app.disable('x-powered-by'); // 서버 정보 노출 최소화
+
+/**
+ * 오류 메시지 번역을 응답 경계 한 곳에서 처리한다.
+ * 라우트마다 언어를 신경 쓰지 않아도 되고, 사전에 없는 새 메시지는 한국어 원문이
+ * 그대로 나간다(messages.js 참고). 클라이언트는 X-Lang 헤더로 언어를 알려준다.
+ */
+app.use((req, res, next) => {
+  const lang = messages.langFromReq(req);
+  const json = res.json.bind(res);
+  res.json = (body) =>
+    json(
+      body && typeof body.error === 'string'
+        ? { ...body, error: messages.translate(body.error, lang) }
+        : body
+    );
+  next();
+});
 
 // 보안 헤더 (모든 응답)
 app.use((req, res, next) => {
@@ -433,6 +452,8 @@ function loadUserChats(userId, user) {
         ai: c.ai || defaultAiFor(user),
         def: chat.migrateDef(c), // 구버전 persona 자동 변환
         messages: Array.isArray(c.messages) ? c.messages : [],
+        // 이 대화에 고정된 AI 응답 언어. 예전 대화에는 없으니 한국어로 본다.
+        lang: chat.normalizeLang(c.lang),
         lengthOverride: c.lengthOverride || null, // 플레이어가 지정한 출력량
         publishedId: c.publishedId || null, // 내가 공개한 항목 id
         sourceId: c.sourceId || null, // 갤러리에서 가져온 원본
@@ -463,6 +484,7 @@ function persistChats(userId, uc) {
       ai: c.ai,
       def: c.def,
       messages: c.messages,
+      lang: chat.normalizeLang(c.lang),
       lengthOverride: c.lengthOverride || null,
       publishedId: c.publishedId || null,
       sourceId: c.sourceId || null,
@@ -555,7 +577,19 @@ io.on('connection', (socket) => {
   const user = auth.getUserById(userId);
   metrics.recordActive(userId); // 오늘 실제로 접속한 사용자
   const ug = loadUserGames(userId, user);
-  const emit = (event, payload) => socket.emit(event, payload);
+  // 화면 언어. 접속할 때 query 로 받고, 사용자가 전환하면 setLang 으로 갱신된다.
+  // 오류 메시지에만 쓴다 — AI 서사의 언어는 게임/대화마다 따로 고정된다.
+  let uiLang = messages.langFromSocket(socket);
+  socket.on('setLang', ({ lang } = {}) => {
+    if (lang === 'ko' || lang === 'en') uiLang = lang;
+  });
+  const emit = (event, payload) =>
+    socket.emit(
+      event,
+      event === 'error' && payload && typeof payload.message === 'string'
+        ? { ...payload, message: messages.translate(payload.message, uiLang) }
+        : payload
+    );
   const active = () => ug.slots[ug.activeId];
   const activeGame = () => active() && active().game;
 
@@ -600,6 +634,9 @@ io.on('connection', (socket) => {
       classes: listClasses(),
       statKeys: STAT_KEYS,
       standardArray: STANDARD_ARRAY,
+      // 클래스·장비·무브 이름의 영어 표시명 대응표. 데이터 자체는 한국어 원문
+      // 그대로 내려가고(세이브·프롬프트가 그 문자열을 참조한다), 화면에 낼 때만 쓴다.
+      dwEn: DW_EN,
       ...gameState(active()),
     });
     emit('slots', slotList(ug));
@@ -681,7 +718,13 @@ io.on('connection', (socket) => {
       return emit('error', { message: `게임은 최대 ${store.MAX_SLOTS}개까지 저장돼요. 기존 게임을 지운 뒤 만드세요.` });
     }
     const id = newId();
-    ug.slots[id] = { id, ai: defaultAiFor(user), game: new GameSession(userId, null) };
+    // 게임 언어는 만드는 시점의 화면 언어로 정해지고 그 뒤로 바뀌지 않는다 —
+    // 중간에 바뀌면 한 게임의 로그와 서사가 두 언어로 갈라진다.
+    ug.slots[id] = {
+      id,
+      ai: defaultAiFor(user),
+      game: new GameSession(userId, { lang: uiLang }),
+    };
     ug.activeId = id;
     persist(userId, ug);
     emit('slotSwitched', gameState(ug.slots[id]));
@@ -708,7 +751,11 @@ io.on('connection', (socket) => {
     if (ug.activeId === id) ug.activeId = Object.keys(ug.slots)[0] || null;
     if (!ug.activeId) {
       const nid = newId();
-      ug.slots[nid] = { id: nid, ai: defaultAiFor(user), game: new GameSession(userId, null) };
+      ug.slots[nid] = {
+        id: nid,
+        ai: defaultAiFor(user),
+        game: new GameSession(userId, { lang: uiLang }),
+      };
       ug.activeId = nid;
     }
     persist(userId, ug);
@@ -743,7 +790,14 @@ io.on('connection', (socket) => {
       return emit('error', { message: `캐릭터 챗은 최대 ${chatStore.MAX_CHATS}개까지 저장돼요.` });
     }
     const id = newId();
-    uc.chats[id] = { id, ai: defaultAiFor(user), def: chat.normalizeDef({}), messages: [] };
+    // 대화 언어도 만드는 시점에 고정된다(설명은 GameSession 쪽 주석 참고).
+    uc.chats[id] = {
+      id,
+      ai: defaultAiFor(user),
+      def: chat.normalizeDef({}),
+      messages: [],
+      lang: uiLang,
+    };
     uc.activeId = id;
     persistChats(userId, uc);
     emit('chatState', chatStatePayload(uc.chats[id], userId));
@@ -777,6 +831,7 @@ io.on('connection', (socket) => {
             def,
             visibility: cur.visibility,
             title: chat.displayName(def) || '제목 없음',
+            lang: c.lang, // 이미 기록돼 있으면 publish() 가 유지한다
           });
         } catch (e) {
           console.error('공개 항목 갱신 실패:', e.message);
@@ -835,6 +890,8 @@ io.on('connection', (socket) => {
         def: c.def,
         visibility,
         title: chat.displayName(c.def) || '제목 없음',
+        // 세계관 본문의 언어 = 이 대화를 만든 언어. 카드 뱃지에 쓰인다.
+        lang: c.lang,
       });
       c.publishedId = entry.id;
       persistChats(userId, uc);
@@ -1008,6 +1065,9 @@ io.on('connection', (socket) => {
       ai: defaultAiFor(user),
       def,
       messages: def.greeting ? [{ role: 'assistant', content: def.greeting }] : [],
+      // 세계관은 원문 그대로 가져오되, **AI가 답하는 언어는 플레이어의 화면 언어**로 잡는다.
+      // 한국어로 쓰인 세계관을 영어로 플레이하는 게 이 기능의 핵심이다.
+      lang: uiLang,
       // 내가 만든 걸 내가 플레이하면 공개 항목과 연결(수정 시 갤러리도 갱신)
       publishedId: entry.ownerId === userId ? entry.id : null,
       sourceId: entry.id,
@@ -1067,7 +1127,10 @@ io.on('connection', (socket) => {
       const len =
         provider === 'free' ? 'veryshort' : chat.effectiveLength(c.def, c.lengthOverride);
       // 무료 체험은 CPU 추론이라 입력 토큰(프롬프트 읽기)이 병목 → 지시문 압축
-      const system = chat.buildSystemPrompt(c.def, len, { compact: provider === 'free' });
+      const system = chat.buildSystemPrompt(c.def, len, {
+        compact: provider === 'free',
+        lang: chat.normalizeLang(c.lang),
+      });
       const recent = c.messages.slice(-chat.MAX_CHAT_HISTORY);
       const aiCfg = { provider, model: c.ai.model || '', apiKey: cfg.apiKey, baseURL: cfg.baseURL };
       const maxTok = chat.maxTokensFor(len);

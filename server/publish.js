@@ -44,7 +44,7 @@ function newPubId() {
  * 정의를 공개(또는 갱신)한다. pubId가 있으면 같은 항목을 갱신(소유자만).
  * @returns {object} 저장된 항목
  */
-function publish({ pubId, ownerId, ownerName, def, visibility, title }) {
+function publish({ pubId, ownerId, ownerName, def, visibility, title, lang }) {
   if (!VISIBILITIES.includes(visibility)) throw new Error('잘못된 공개 범위입니다.');
   const db = loadAll();
   let entry = pubId ? db.entries[pubId] : null;
@@ -58,6 +58,10 @@ function publish({ pubId, ownerId, ownerName, def, visibility, title }) {
     ownerName,
     title: String(title || '제목 없음').slice(0, 80),
     def,
+    // 이 세계관이 쓰인 언어. 본문을 번역하지 않으므로, 갤러리 카드에 뱃지로
+    // 알려주기 위해 기록만 한다. 한 번 공개한 뒤에는 갱신해도 유지된다
+    // (본문을 통째로 다시 쓰는 일은 드물고, 흔들리면 카드가 오락가락한다).
+    lang: (entry && entry.lang) || (lang === 'en' ? 'en' : 'ko'),
     visibility,
     plays: entry ? entry.plays || 0 : 0,
     createdAt: entry ? entry.createdAt : now,
@@ -215,6 +219,8 @@ function summarize(e) {
     id: e.id,
     title: e.title,
     ownerName: e.ownerName,
+    // 원문 언어(없으면 한국어) — 카드에 뱃지로 붙는다.
+    lang: e.lang === 'en' ? 'en' : 'ko',
     visibility: e.visibility,
     plays: e.plays || 0,
     updatedAt: e.updatedAt,

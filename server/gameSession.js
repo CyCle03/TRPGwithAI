@@ -2,6 +2,10 @@
 
 const { callGM, suggestGmActions } = require('./aiGM');
 const rules = require('./rulesEngine');
+const { DW_EN } = require('./dungeonWorldEn');
+
+/** 던전 월드 데이터의 영어 표시명. 표에 없으면 원문 그대로. */
+const enName = (n) => DW_EN[n] || n;
 const {
   createCharacter,
   ensureCharacterFields,
@@ -21,6 +25,73 @@ const {
 
 const MAX_HISTORY = 24; // API에 보내는 최근 메시지 수 (컨텍스트/토큰 관리)
 
+/**
+ * 게임 언어별 문구.
+ *
+ * 화면 로그와 **AI에게 보내는 시스템 메시지**가 여기 있다. 둘 다 게임에 고정된
+ * 언어를 따른다 — 진행 중에 언어를 바꿔도 이미 쌓인 로그는 그대로 둔다(원문 보존).
+ */
+const L = {
+  ko: {
+    adventureBegins: (name, cls) => `${name} (${cls}) 의 모험이 시작됩니다.`,
+    kickoff: (name, cls, look) =>
+      `새로운 모험을 시작한다. 플레이어 캐릭터는 ${name}(${cls})다.${look} 이 캐릭터의 소개를 반영해 흥미로운 첫 장면을 묘사하고, 플레이어가 바로 행동할 수 있는 상황을 제시하라. 첫 장면에는 판정이 필요 없다.`,
+    lookLine: (look) => ` 캐릭터 소개: "${look}".`,
+    alreadyDead: (name) => `${name}은(는) 이미 세상을 떠났습니다. '새 게임'으로 새 캐릭터를 만드세요.`,
+    levelUpPrompt: '⭐ 레벨업! 성장 방향을 선택하세요.',
+    levelReached: (lv) => `레벨 ${lv} 달성`,
+    moveLearned: (n) => `무브 습득: ${n}`,
+    xpAchieve: (n) => `✨ 경험치 +${n} (성취)`,
+    xpFromMiss: '✨ 경험치 +1 (실패에서 배운다)',
+    defaultMove: '판정',
+    rollInfo: (moveName, roll) =>
+      `[시스템 판정 결과] 무브: ${moveName}, 능력치: ${roll.stat || '없음'}, ` +
+      `굴림: 2d6+(${roll.mod}) = [${roll.dice.join(',')}] = ${roll.total}, ` +
+      `구간: ${roll.tier} (${roll.tierLabel}). ` +
+      `이 결과에 맞는 서사를 만들어라. 피해/회복/아이템 변화가 있으면 action.type="update_state"로 요청하라. 추가 판정은 요청하지 마라(action.type은 update_state 또는 none).`,
+    lastBreathRoll: (dice, total, label) =>
+      `죽음의 문턱 — 🎲 2d6 = [${dice.join(',')}] = ${total} → ${label}`,
+    lastBreathStrongLog: '💀 죽음의 문턱: 죽음을 속이고 돌아왔다 (HP 1)',
+    lastBreathStrongMsg:
+      '[시스템] 캐릭터가 죽음의 문턱(Last Breath)에서 10+로 죽음을 속였다. 가까스로 의식을 붙잡고 살아나는 긴박한 장면을 짧게 서사화하라. HP는 1로 회복됐다. 추가 판정·피해 요청 없이 action.type="none"으로만.',
+    lastBreathWeakLog: '💀 죽음의 문턱: 죽음과 거래했다 — 대가가 따른다 (HP 1)',
+    lastBreathWeakMsg:
+      '[시스템] 캐릭터가 죽음의 문턱에서 7-9가 나왔다. 죽음(Death)이 거래를 제안한다: 목숨을 돌려주는 대신 반드시 갚아야 할 끔찍한 대가·빚·사명을 하나 구체적으로 제시하고 그 장면을 서사화하라. HP는 1로 돌아왔다. action.type="none".',
+    lastBreathMissLog: '☠️ 죽음의 문턱: 6- — 죽음이 데려갔다.',
+    lastBreathMissMsg:
+      '[시스템] 캐릭터가 죽음의 문턱에서 6-가 나와 사망했다. 이 캐릭터의 마지막을 존엄하고 인상적으로 마무리하는 짧은 결말 서사를 써라. 이후 모험은 여기서 끝난다. action.type="none".',
+  },
+  en: {
+    adventureBegins: (name, cls) => `The adventure of ${name} (${cls}) begins.`,
+    kickoff: (name, cls, look) =>
+      `A new adventure begins. The player character is ${name} (${cls}).${look} Draw on that description to paint an interesting opening scene and present a situation the player can act on straight away. The opening scene needs no roll.`,
+    lookLine: (look) => ` Character description: "${look}".`,
+    alreadyDead: (name) => `${name} has already passed on. Start a new character with "New game".`,
+    levelUpPrompt: '⭐ Level up! Choose how you grow.',
+    levelReached: (lv) => `reached level ${lv}`,
+    moveLearned: (n) => `learned move: ${n}`,
+    xpAchieve: (n) => `✨ XP +${n} (achievement)`,
+    xpFromMiss: '✨ XP +1 (you learn from failure)',
+    defaultMove: 'roll',
+    rollInfo: (moveName, roll) =>
+      `[System roll result] Move: ${moveName}, stat: ${roll.stat || 'none'}, ` +
+      `roll: 2d6+(${roll.mod}) = [${roll.dice.join(',')}] = ${roll.total}, ` +
+      `tier: ${roll.tier} (${roll.tierLabel}). ` +
+      `Write the prose that matches this result. If there is damage, healing or an item change, request it with action.type="update_state". Do not request another roll (action.type must be update_state or none).`,
+    lastBreathRoll: (dice, total, label) =>
+      `Last Breath — 🎲 2d6 = [${dice.join(',')}] = ${total} → ${label}`,
+    lastBreathStrongLog: '💀 Last Breath: cheated death and came back (HP 1)',
+    lastBreathStrongMsg:
+      '[System] The character rolled 10+ on Last Breath and cheated death. Write a short, tense scene of them barely holding on to consciousness and surviving. HP has been restored to 1. No further rolls or damage requests — action.type="none" only.',
+    lastBreathWeakLog: '💀 Last Breath: struck a bargain with death — there is a price (HP 1)',
+    lastBreathWeakMsg:
+      '[System] The character rolled 7-9 on Last Breath. Death offers a bargain: name one concrete, terrible price, debt or errand they must repay in exchange for their life, and narrate that scene. HP is back to 1. action.type="none".',
+    lastBreathMissLog: '☠️ Last Breath: 6- — death took them.',
+    lastBreathMissMsg:
+      '[System] The character rolled 6- on Last Breath and died. Write a short closing passage that gives this character a dignified, memorable end. The adventure ends here. action.type="none".',
+  },
+};
+
 class GameSession {
   constructor(userId, data) {
     this.userId = userId;
@@ -33,6 +104,9 @@ class GameSession {
     this.enemies = data?.enemies || []; // 현재 장면의 적 NPC
     this.companions = data?.companions || []; // 현재 장면의 동료 NPC
     this.dead = data?.dead || false; // 죽음의 문턱(Last Breath) 6- → 캐릭터 사망
+    // 이 게임의 언어. 만들 때 정해지고 진행 중에 바뀌지 않는다 —
+    // 중간에 바뀌면 한 게임의 로그와 서사가 두 언어로 갈라진다.
+    this.lang = data?.lang === 'en' ? 'en' : 'ko';
     this.aiConfig = null; // 런타임 전용: {provider, model, apiKey} — 저장 안 함(보안)
     this.busy = false;
     this._resolvingDeath = false; // 죽음의 문턱 처리 중 재진입 방지(저장 안 함)
@@ -49,6 +123,11 @@ class GameSession {
     this.aiConfig = cfg;
   }
 
+  /** 이 게임에 고정된 언어의 문구 표. */
+  get L() {
+    return L[this.lang] || L.ko;
+  }
+
   hasCharacter() {
     return !!this.character;
   }
@@ -63,6 +142,7 @@ class GameSession {
       enemies: this.enemies,
       companions: this.companions,
       dead: this.dead,
+      lang: this.lang,
     };
   }
 
@@ -96,16 +176,14 @@ class GameSession {
 
     emit('stateUpdate', this.character);
     emit('fieldUpdate', { enemies: this.enemies, companions: this.companions });
-    this._pushLog(
-      emit,
-      'system',
-      `${this.character.name} (${this.character.className}) 의 모험이 시작됩니다.`
-    );
+    // 영어 게임에서는 클래스명도 영어 표시명으로 넣는다(세이브는 한국어 원문 그대로).
+    const clsName = this.lang === 'en' ? enName(this.character.className) : this.character.className;
+    this._pushLog(emit, 'system', this.L.adventureBegins(this.character.name, clsName));
 
-    const lookLine = this.character.look ? ` 캐릭터 소개: "${this.character.look}".` : '';
+    const lookLine = this.character.look ? this.L.lookLine(this.character.look) : '';
     const kickoff = {
       role: 'user',
-      content: `새로운 모험을 시작한다. 플레이어 캐릭터는 ${this.character.name}(${this.character.className})다.${lookLine} 이 캐릭터의 소개를 반영해 흥미로운 첫 장면을 묘사하고, 플레이어가 바로 행동할 수 있는 상황을 제시하라. 첫 장면에는 판정이 필요 없다.`,
+      content: this.L.kickoff(this.character.name, clsName, lookLine),
     };
     this.messages.push(kickoff);
 
@@ -120,7 +198,7 @@ class GameSession {
     }
     if (this.dead) {
       emit('gameOver', { reason: 'dead' });
-      emit('error', { message: `${this.character.name}은(는) 이미 세상을 떠났습니다. '새 게임'으로 새 캐릭터를 만드세요.` });
+      emit('error', { message: this.L.alreadyDead(this.character.name) });
       return;
     }
     if (this.pendingLevelUp) {
@@ -168,7 +246,7 @@ class GameSession {
     if (this.pendingLevelUp) return;
     if (this.character.xp >= xpToLevel(this.character.level)) {
       this.pendingLevelUp = getLevelUpOptions(this.character);
-      this._pushLog(emit, 'system', '⭐ 레벨업! 성장 방향을 선택하세요.');
+      this._pushLog(emit, 'system', this.L.levelUpPrompt);
       emit('levelUp', this.pendingLevelUp);
     }
   }
@@ -179,9 +257,13 @@ class GameSession {
     const result = applyLevelUp(this.character, { ability, moveId });
     this.pendingLevelUp = null;
     if (result) {
-      const parts = [`레벨 ${result.level} 달성`];
+      const parts = [this.L.levelReached(result.level)];
       if (result.statUp) parts.push(`${result.statUp} +1`);
-      if (result.move) parts.push(`무브 습득: ${result.move.name}`);
+      if (result.move) {
+        parts.push(
+          this.L.moveLearned(this.lang === 'en' ? enName(result.move.name) : result.move.name)
+        );
+      }
       this._pushLog(emit, 'state', `⭐ ${parts.join(' · ')}`);
     }
     emit('stateUpdate', this.character);
@@ -229,7 +311,7 @@ class GameSession {
       this._lastBonusTurn = this._turnCount;
       this.character.xp += action.xpGain;
       emit('stateUpdate', this.character);
-      this._pushLog(emit, 'state', `✨ 경험치 +${action.xpGain} (성취)`);
+      this._pushLog(emit, 'state', this.L.xpAchieve(action.xpGain));
     }
 
     if (action.type === 'update_state') {
@@ -263,13 +345,13 @@ class GameSession {
   /** 판정 요청을 코드가 굴리고, 결과를 다시 AI에 먹여 서사화한다. */
   async _resolveRoll(emit, action) {
     const roll = rules.resolveMove(action.stat, this.character);
-    const moveName = action.move || '판정';
+    const moveName = action.move || this.L.defaultMove;
 
     // 주사위 결과를 로그에 구분 표시 (tier/주사위눈 포함 → 클라 애니메이션)
     this._pushLog(
       emit,
       'dice',
-      `${moveName} — ${rules.formatRoll(roll)}`,
+      `${moveName} — ${rules.formatRoll(roll, this.lang)}`,
       'dice',
       { tier: roll.tier, dice: roll.dice }
     );
@@ -279,15 +361,14 @@ class GameSession {
       this._missThisTurn = true; // 이 턴엔 보너스 XP 금지(중복 방지)
       this.character.xp += 1;
       emit('stateUpdate', this.character);
-      this._pushLog(emit, 'state', '✨ 경험치 +1 (실패에서 배운다)');
+      this._pushLog(emit, 'state', this.L.xpFromMiss);
     }
 
     // 2차 패스: 판정 결과를 시스템 메시지로 AI에 전달 → 결과 서사 요청
-    const rollInfo =
-      `[시스템 판정 결과] 무브: ${moveName}, 능력치: ${roll.stat || '없음'}, ` +
-      `굴림: 2d6+(${roll.mod}) = [${roll.dice.join(',')}] = ${roll.total}, ` +
-      `구간: ${roll.tier} (${roll.tierLabel}). ` +
-      `이 결과에 맞는 서사를 만들어라. 피해/회복/아이템 변화가 있으면 action.type="update_state"로 요청하라. 추가 판정은 요청하지 마라(action.type은 update_state 또는 none).`;
+    const rollInfo = this.L.rollInfo(moveName, {
+      ...roll,
+      tierLabel: rules.tierLabel(roll.tier, this.lang),
+    });
 
     this.messages.push({ role: 'user', content: rollInfo });
 
@@ -298,7 +379,7 @@ class GameSession {
   /** 상태 변경을 검증·반영하고 상태창 갱신 + 로그. HP 0이면 죽음의 문턱 판정. */
   async _applyAndEmit(emit, action) {
     const applied = rules.applyStateUpdate(this.character, action);
-    const changeText = rules.formatStateChange(applied);
+    const changeText = rules.formatStateChange(applied, this.lang);
     emit('stateUpdate', this.character);
     if (changeText) {
       this._pushLog(emit, 'state', changeText, 'systemLog');
@@ -321,7 +402,7 @@ class GameSession {
     this._pushLog(
       emit,
       'dice',
-      `죽음의 문턱 — 🎲 2d6 = [${dice.join(',')}] = ${total} → ${rules.TIER_LABEL[tier]}`,
+      this.L.lastBreathRoll(dice, total, rules.tierLabel(tier, this.lang)),
       'dice',
       { tier, dice }
     );
@@ -330,21 +411,18 @@ class GameSession {
     if (tier === 'strong') {
       this.character.hp = 1;
       emit('stateUpdate', this.character);
-      this._pushLog(emit, 'state', '💀 죽음의 문턱: 죽음을 속이고 돌아왔다 (HP 1)');
-      sysMsg =
-        '[시스템] 캐릭터가 죽음의 문턱(Last Breath)에서 10+로 죽음을 속였다. 가까스로 의식을 붙잡고 살아나는 긴박한 장면을 짧게 서사화하라. HP는 1로 회복됐다. 추가 판정·피해 요청 없이 action.type="none"으로만.';
+      this._pushLog(emit, 'state', this.L.lastBreathStrongLog);
+      sysMsg = this.L.lastBreathStrongMsg;
     } else if (tier === 'weak') {
       this.character.hp = 1;
       emit('stateUpdate', this.character);
-      this._pushLog(emit, 'state', '💀 죽음의 문턱: 죽음과 거래했다 — 대가가 따른다 (HP 1)');
-      sysMsg =
-        '[시스템] 캐릭터가 죽음의 문턱에서 7-9가 나왔다. 죽음(Death)이 거래를 제안한다: 목숨을 돌려주는 대신 반드시 갚아야 할 끔찍한 대가·빚·사명을 하나 구체적으로 제시하고 그 장면을 서사화하라. HP는 1로 돌아왔다. action.type="none".';
+      this._pushLog(emit, 'state', this.L.lastBreathWeakLog);
+      sysMsg = this.L.lastBreathWeakMsg;
     } else {
       this.dead = true;
-      this._pushLog(emit, 'state', '☠️ 죽음의 문턱: 6- — 죽음이 데려갔다.');
+      this._pushLog(emit, 'state', this.L.lastBreathMissLog);
       emit('gameOver', { reason: 'lastBreath' });
-      sysMsg =
-        '[시스템] 캐릭터가 죽음의 문턱에서 6-가 나와 사망했다. 이 캐릭터의 마지막을 존엄하고 인상적으로 마무리하는 짧은 결말 서사를 써라. 이후 모험은 여기서 끝난다. action.type="none".';
+      sysMsg = this.L.lastBreathMissMsg;
     }
     this.messages.push({ role: 'user', content: sysMsg });
     await this._runGMTurn(emit, this._recentMessages(), { allowRollFollowup: false });

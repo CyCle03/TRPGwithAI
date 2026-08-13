@@ -1,10 +1,16 @@
-/* global App */
+/* global App, I18N */
 'use strict';
 
 /**
  * 캐릭터 챗 페이지 — 세계관/캐릭터 설정, 대화, 공개 갤러리, 내 프로필.
  * 계정·설정·모델 모달은 common.js(App)가 담당한다.
+ *
+ * **세계관·캐릭터·대화 본문은 번역하지 않는다.** 사용자가 쓴 원문이 곧 저장값이라
+ * 화면 언어를 바꿔도 그대로 두고, 갤러리 카드에 원문 언어 뱃지만 붙인다.
+ * 번역되는 건 이 파일이 만들어 내는 UI 문구뿐이다.
  */
+
+const t = I18N.t;
 
 let socket = null;
 
@@ -81,8 +87,11 @@ const dtCommentInput = document.getElementById('dtCommentInput');
 const dtCommentSend = document.getElementById('dtCommentSend');
 const dtCloseBtn = document.getElementById('dtClose');
 
+// 태그 '값'은 언제나 원문이다 — 저장되고, 갤러리 필터가 그 문자열로 묶는다.
+// 언어별로 다른 값을 저장하면 같은 장르가 둘로 쪼개진다. 화면 표시만 사전을 탄다.
 const GENRE_SUGGEST = ['판타지', '로맨스', '미스터리', '호러', 'SF', '학원', '무협', '일상', '느와르', '코미디'];
-const VIS_LABEL = { private: '🔒 비공개', link: '🔗 링크 공개', public: '🌐 전체 공개' };
+const tagLabel = (tag) => I18N.tOr('tag.' + tag, tag);
+const visLabel = (v) => t('vis.' + v);
 // 커버 이미지를 등록하지 않은 항목이 쓸 기본 커버.
 const DEFAULT_COVER = '/assets/cover-default.svg';
 
@@ -143,7 +152,7 @@ function wireSocket(s) {
   });
   s.on('chatThinking', ({ on }) => {
     chatThinkingEl.classList.toggle('hidden', !on);
-    if (on) App.startThinking(chatThinkingEl, '상대가 입력 중', currentChatAi.provider);
+    if (on) App.startThinking(chatThinkingEl, t('chat.typing'), currentChatAi.provider);
     else App.stopThinking();
     setChatBusy(on);
   });
@@ -152,7 +161,7 @@ function wireSocket(s) {
     updateChatModelLabel();
   });
   s.on('chatRollback', () => removeLastChatUserMsg());
-  s.on('reportDone', ({ count }) => alert(`신고가 접수되었습니다. (누적 ${count}건)`));
+  s.on('reportDone', ({ count }) => alert(t('gal.reported', { n: count })));
   s.on('adminReports', ({ items }) => renderAdminReports(items));
   s.on('adminStats', (data) => renderAdminStats(data));
   s.on('profile', (data) => {
@@ -280,7 +289,7 @@ function appendChatMsg(role, content, imageId) {
     const img = document.createElement('img');
     img.className = 'chat-img';
     img.src = `/img/${imageId}`;
-    img.alt = '장면 이미지';
+    img.alt = t('chat.sceneImage');
     img.loading = 'lazy';
     div.appendChild(img);
   }
@@ -305,7 +314,7 @@ function finalizeBubble(bubble, content, imageId) {
     const img = document.createElement('img');
     img.className = 'chat-img';
     img.src = `/img/${imageId}`;
-    img.alt = '장면 이미지';
+    img.alt = t('chat.sceneImage');
     img.loading = 'lazy';
     bubble.insertBefore(img, bubble.firstChild);
   }
@@ -329,7 +338,7 @@ function renderChatBar(data) {
   lastChatList = { chats: data.chats || [], activeId: data.activeId, max: data.max || 12 };
   if (chatBarEl) {
     const active = lastChatList.chats.find((c) => c.id === lastChatList.activeId);
-    chatBarEl.textContent = active ? (active.configured ? active.name : '설정 안 된 캐릭터') : '';
+    chatBarEl.textContent = active ? (active.configured ? active.name : t('chats.unnamed')) : '';
   }
   renderChatsList();
 }
@@ -346,7 +355,7 @@ function renderChatsList() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'cr-main';
-    btn.textContent = c.configured ? c.name : '설정 안 된 캐릭터';
+    btn.textContent = c.configured ? c.name : t('chats.unnamed');
     btn.addEventListener('click', () => {
       if (c.id !== activeId) {
         socket.emit('switchChat', { id: c.id }); // 전환 응답(chatState)이 대화를 연다
@@ -363,10 +372,10 @@ function renderChatsList() {
       del.type = 'button';
       del.className = 'cr-del';
       del.textContent = '✕';
-      del.title = '이 캐릭터 삭제';
+      del.title = t('chats.deleteThis');
       del.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (confirm(`"${c.name || '이 캐릭터'}"을(를) 삭제할까요? 대화도 함께 지워집니다.`)) {
+        if (confirm(t('chats.deleteAsk', { name: c.name || t('chats.thisChar') }))) {
           socket.emit('deleteChat', { id: c.id });
         }
       });
@@ -378,7 +387,7 @@ function renderChatsList() {
   if (chatsEmptyEl) chatsEmptyEl.classList.toggle('hidden', chats.length > 0);
   const full = chats.length >= max;
   newChatBtn.disabled = full;
-  newChatBtn.textContent = full ? `캐릭터는 최대 ${max}개까지 저장돼요` : '＋ 새 캐릭터 만들기';
+  newChatBtn.textContent = full ? t('chats.max', { max }) : t('chats.new');
 }
 
 /** 활성 챗 상태를 반영. data가 null이면 챗 없음. */
@@ -445,7 +454,7 @@ function renderCharEditors() {
     const nameIn = document.createElement('input');
     nameIn.type = 'text';
     nameIn.maxLength = 60;
-    nameIn.placeholder = `캐릭터 ${i + 1} 이름`;
+    nameIn.placeholder = t('cp.charName', { n: i + 1 });
     nameIn.value = ch.name;
     nameIn.addEventListener('input', () => (chatChars[i].name = nameIn.value));
     head.appendChild(nameIn);
@@ -454,7 +463,7 @@ function renderCharEditors() {
       del.type = 'button';
       del.className = 'cp-char-del';
       del.textContent = '✕';
-      del.title = '이 캐릭터 삭제';
+      del.title = t('cp.charDelete');
       del.addEventListener('click', () => {
         chatChars.splice(i, 1);
         renderCharEditors();
@@ -463,7 +472,7 @@ function renderCharEditors() {
     }
     const desc = document.createElement('textarea');
     desc.rows = 3;
-    desc.placeholder = '성격 · 말투 · 외형 · 배경';
+    desc.placeholder = t('cp.charDesc');
     desc.value = ch.description;
     desc.addEventListener('input', () => (chatChars[i].description = desc.value));
     row.appendChild(head);
@@ -480,7 +489,7 @@ function renderImageEditors() {
     row.className = 'cp-image';
     const thumb = document.createElement('img');
     thumb.src = `/img/${im.id}`;
-    thumb.alt = im.tag || '이미지';
+    thumb.alt = im.tag || t('cp.imageAlt');
     row.appendChild(thumb);
 
     const fields = document.createElement('div');
@@ -488,13 +497,13 @@ function renderImageEditors() {
     const tagIn = document.createElement('input');
     tagIn.type = 'text';
     tagIn.maxLength = 40;
-    tagIn.placeholder = '태그 (예: 루나-미소)';
+    tagIn.placeholder = t('cp.imageTag');
     tagIn.value = im.tag;
     tagIn.addEventListener('input', () => (chatImages[i].tag = tagIn.value));
     const descIn = document.createElement('input');
     descIn.type = 'text';
     descIn.maxLength = 200;
-    descIn.placeholder = '언제 보여줄지 설명 (선택)';
+    descIn.placeholder = t('cp.imageWhen');
     descIn.value = im.description;
     descIn.addEventListener('input', () => (chatImages[i].description = descIn.value));
     fields.appendChild(tagIn);
@@ -506,10 +515,8 @@ function renderImageEditors() {
     cover.type = 'button';
     const isCover = chatCoverId === im.id;
     cover.className = 'cp-cover-btn' + (isCover ? ' on' : '');
-    cover.textContent = isCover ? '★ 대표' : '☆ 대표';
-    cover.title = isCover
-      ? '대표 이미지로 지정됨 — 다시 누르면 자동 선택으로 돌아갑니다'
-      : '갤러리 카드에 쓸 대표 이미지로 지정';
+    cover.textContent = isCover ? t('cp.coverOn') : t('cp.coverOff');
+    cover.title = isCover ? t('cp.coverOnTitle') : t('cp.coverOffTitle');
     cover.addEventListener('click', () => {
       chatCoverId = isCover ? '' : im.id;
       renderImageEditors();
@@ -520,7 +527,7 @@ function renderImageEditors() {
     del.type = 'button';
     del.className = 'cp-char-del';
     del.textContent = '✕';
-    del.title = '이 이미지 빼기';
+    del.title = t('cp.imageRemove');
     del.addEventListener('click', () => {
       // 대표로 지정한 걸 빼면 지정도 함께 해제한다(서버도 걸러내지만 폼 표시를 맞춘다)
       if (chatCoverId === chatImages[i].id) chatCoverId = '';
@@ -532,9 +539,7 @@ function renderImageEditors() {
   });
   if (cpCoverHintEl) {
     cpCoverHintEl.classList.toggle('hidden', !chatImages.length);
-    cpCoverHintEl.textContent = chatCoverId
-      ? '★ 표시한 이미지를 갤러리 카드에 씁니다.'
-      : '대표를 고르지 않으면 등록한 이미지 중 장면 컷을 골라 자동으로 씁니다.';
+    cpCoverHintEl.textContent = chatCoverId ? t('cp.coverHintPicked') : t('cp.coverHintAuto');
   }
 }
 
@@ -552,7 +557,7 @@ function uploadImageFiles(files) {
         chatImages.push({ id: data.id, tag: '', description: '' });
         renderImageEditors();
       } catch (e) {
-        chatSetupErrorEl.textContent = `이미지 업로드 실패: ${e.message}`;
+        chatSetupErrorEl.textContent = t('cp.uploadFailed', { msg: e.message });
         chatSetupErrorEl.classList.remove('hidden');
       }
     };
@@ -619,7 +624,7 @@ function renderTagSuggestions() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'tag-chip';
-    b.textContent = `#${g}`;
+    b.textContent = `#${tagLabel(g)}`;
     b.addEventListener('click', () => {
       const cur = cpTagsEl.value.split(',').map((t) => t.trim()).filter(Boolean);
       if (cur.includes(g)) return;
@@ -637,11 +642,12 @@ function updatePublishHint(published) {
     cpVisibilityEl.value = published.visibility;
     const link = `${location.origin}/chat?play=${published.id}`;
     cpPublishHintEl.innerHTML =
-      `${VIS_LABEL[published.visibility]} 중 · 플레이 ${published.plays || 0}회<br />` +
-      `공유 링크: <b>${escapeHtml(link)}</b>`;
+      t('cp.published', { vis: visLabel(published.visibility), n: published.plays || 0 }) +
+      '<br />' +
+      t('cp.shareLink', { link: escapeHtml(link) });
   } else {
     cpVisibilityEl.value = 'private';
-    cpPublishHintEl.textContent = '공개하면 다른 사용자가 각자 자기 대화로 플레이할 수 있어요.';
+    cpPublishHintEl.textContent = t('cp.publishHint');
   }
 }
 
@@ -652,7 +658,7 @@ function renderGalleryList(el, items, mine) {
   if (!items || !items.length) {
     const d = document.createElement('div');
     d.className = 'gallery-empty';
-    d.textContent = mine ? '아직 공개한 것이 없어요.' : '아직 공개된 것이 없어요. 처음으로 공개해보세요!';
+    d.textContent = mine ? t('gal.emptyMine') : t('gal.emptyAll');
     el.appendChild(d);
     return;
   }
@@ -677,9 +683,11 @@ function renderGalleryList(el, items, mine) {
       `by ${it.ownerName}`,
       `♥ ${it.likes || 0}`,
       `💬 ${it.commentCount || 0}`,
-      `플레이 ${it.plays}`,
-      it.tags && it.tags.length ? it.tags.map((t) => '#' + t).join(' ') : null,
-      mine ? VIS_LABEL[it.visibility] : null,
+      t('gal.plays', { n: it.plays }),
+      // 원문 언어 뱃지 — 세계관 본문은 번역하지 않으므로 무슨 언어로 쓰였는지 알려준다.
+      it.lang && it.lang !== I18N.lang ? t('lang.badge.' + it.lang) : null,
+      it.tags && it.tags.length ? it.tags.map((x) => '#' + tagLabel(x)).join(' ') : null,
+      mine ? visLabel(it.visibility) : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -691,22 +699,22 @@ function renderGalleryList(el, items, mine) {
     card.appendChild(body);
     const play = document.createElement('button');
     play.className = 'primary gi-play';
-    play.textContent = '플레이';
+    play.textContent = t('gal.play');
     play.addEventListener('click', () => socket.emit('playPublished', { id: it.id }));
     card.appendChild(play);
     const detail = document.createElement('button');
     detail.className = 'ghost gi-play';
-    detail.textContent = '💬 상세';
-    detail.title = '태그 · 추천 · 댓글 보기';
+    detail.textContent = t('gal.detail');
+    detail.title = t('gal.detailTitle');
     detail.addEventListener('click', () => openDetail(it));
     card.appendChild(detail);
     if (!mine) {
       const rep = document.createElement('button');
       rep.className = 'ghost gi-play';
-      rep.textContent = '🚩 신고';
-      rep.title = '부적절한 내용 신고';
+      rep.textContent = t('gal.report');
+      rep.title = t('gal.reportTitle');
       rep.addEventListener('click', () => {
-        const reason = prompt(`"${it.title}"을(를) 신고하는 이유를 적어주세요.`);
+        const reason = prompt(t('gal.reportAsk', { title: it.title }));
         if (reason === null) return;
         socket.emit('reportPublished', { id: it.id, reason });
       });
@@ -715,9 +723,9 @@ function renderGalleryList(el, items, mine) {
     if (mine) {
       const un = document.createElement('button');
       un.className = 'ghost gi-play';
-      un.textContent = '공개 중단';
+      un.textContent = t('gal.unpublish');
       un.addEventListener('click', () => {
-        if (confirm(`"${it.title}" 공개를 중단할까요? 갤러리에서 사라집니다.`)) {
+        if (confirm(t('gal.unpublishAsk', { title: it.title }))) {
           socket.emit('unpublishById', { id: it.id });
         }
       });
@@ -733,18 +741,18 @@ function renderTagFilter(tags) {
   galleryTagsEl.innerHTML = '';
   const all = document.createElement('button');
   all.className = 'tag-chip' + (galleryTag ? '' : ' active');
-  all.textContent = '전체';
+  all.textContent = t('gal.tagAll');
   all.addEventListener('click', () => {
     galleryTag = '';
     requestGallery();
   });
   galleryTagsEl.appendChild(all);
-  (tags || []).forEach((t) => {
+  (tags || []).forEach((x) => {
     const b = document.createElement('button');
-    b.className = 'tag-chip' + (galleryTag === t.tag ? ' active' : '');
-    b.textContent = `#${t.tag} ${t.count}`;
+    b.className = 'tag-chip' + (galleryTag === x.tag ? ' active' : '');
+    b.textContent = `#${tagLabel(x.tag)} ${x.count}`;
     b.addEventListener('click', () => {
-      galleryTag = galleryTag === t.tag ? '' : t.tag;
+      galleryTag = galleryTag === x.tag ? '' : x.tag;
       requestGallery();
     });
     galleryTagsEl.appendChild(b);
@@ -766,14 +774,14 @@ function openGallery() {
 /** 내 프로필 렌더. */
 function renderProfile(data) {
   if (!profileListEl) return;
-  profileSubEl.textContent = `${data.username || ''} 님이 공개한 작품입니다.`;
+  profileSubEl.textContent = t('prof.sub', { name: data.username || '' });
   if (data.totals) {
     profileTotalsEl.innerHTML = '';
     [
-      ['작품', data.totals.works],
-      ['♥ 추천', data.totals.likes],
-      ['플레이', data.totals.plays],
-      ['댓글', data.totals.comments],
+      [t('prof.works'), data.totals.works],
+      [t('prof.likes'), data.totals.likes],
+      [t('prof.plays'), data.totals.plays],
+      [t('prof.comments'), data.totals.comments],
     ].forEach(([k, v]) => {
       const d = document.createElement('div');
       d.className = 'pt-item';
@@ -792,17 +800,17 @@ function openDetail(it) {
   dtTitleEl.textContent = it.title;
   dtMetaEl.textContent = [
     `by ${it.ownerName}`,
-    it.characterCount ? `캐릭터 ${it.characterCount}` : null,
-    it.imageCount ? `이미지 ${it.imageCount}` : null,
-    `플레이 ${it.plays}`,
+    it.characterCount ? t('gal.charCount', { n: it.characterCount }) : null,
+    it.imageCount ? t('gal.imageCount', { n: it.imageCount }) : null,
+    t('gal.plays', { n: it.plays }),
   ]
     .filter(Boolean)
     .join(' · ');
   dtTagsEl.innerHTML = '';
-  (it.tags || []).forEach((t) => {
+  (it.tags || []).forEach((x) => {
     const s = document.createElement('span');
     s.className = 'tag-chip static';
-    s.textContent = `#${t}`;
+    s.textContent = `#${tagLabel(x)}`;
     dtTagsEl.appendChild(s);
   });
   dtLikeCountEl.textContent = it.likes || 0;
@@ -818,7 +826,7 @@ function renderComments(id, items, me) {
   if (!items.length) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = '아직 댓글이 없습니다.';
+    p.textContent = t('dt.noComments');
     dtCommentsEl.appendChild(p);
     return;
   }
@@ -836,9 +844,9 @@ function renderComments(id, items, me) {
     if (c.userId === me || App.isAdmin || (detailItem && detailItem.ownerName === App.username)) {
       const del = document.createElement('button');
       del.className = 'c-del';
-      del.textContent = '삭제';
+      del.textContent = t('common.delete');
       del.addEventListener('click', () => {
-        if (confirm('이 댓글을 삭제할까요?')) {
+        if (confirm(t('dt.commentDeleteAsk'))) {
           socket.emit('deleteComment', { id, commentId: c.id });
         }
       });
@@ -851,15 +859,15 @@ function renderComments(id, items, me) {
 /** 운영자용 접속 통계 렌더(오늘 요약 + 최근 n일 막대). */
 function renderAdminStats(data) {
   if (!statTodayEl || !data) return;
-  const t = data.today || {};
+  const today = data.today || {};
 
   const cards = [
-    ['방문자', t.visitors, '오늘 다녀간 서로 다른 접속자'],
-    ['페이지 진입', t.pages, '랜딩·게임·챗 페이지를 연 횟수'],
-    ['접속 사용자', t.users, '로그인 상태로 실제 이용한 사람'],
-    ['신규 가입', t.signups, '오늘 새로 만든 계정'],
-    ['챗 응답', t.chatMsgs, '캐릭터 챗 AI 호출'],
-    ['게임 진행', t.gameMsgs, 'AI GM 호출'],
+    [t('adm.visitors'), today.visitors, t('adm.visitorsDesc')],
+    [t('adm.pages'), today.pages, t('adm.pagesDesc')],
+    [t('adm.users'), today.users, t('adm.usersDesc')],
+    [t('adm.signups'), today.signups, t('adm.signupsDesc')],
+    [t('adm.chatCalls'), today.chatMsgs, t('adm.chatCallsDesc')],
+    [t('adm.gameCalls'), today.gameMsgs, t('adm.gameCallsDesc')],
   ];
   statTodayEl.innerHTML = '';
   cards.forEach(([label, value, tip]) => {
@@ -881,7 +889,7 @@ function renderAdminStats(data) {
   days.forEach((d) => {
     const col = document.createElement('div');
     col.className = 'stat-bar';
-    col.title = `${d.day} · 방문자 ${d.visitors} · 진입 ${d.pages} · 사용자 ${d.users}`;
+    col.title = t('adm.bar', { day: d.day, visitors: d.visitors, pages: d.pages, users: d.users });
     const fill = document.createElement('i');
     fill.style.height = `${Math.round(((d.visitors || 0) / max) * 100)}%`;
     const cap = document.createElement('span');
@@ -891,14 +899,19 @@ function renderAdminStats(data) {
   });
 
   const tot = data.totals || {};
-  const ai = Object.entries(t.ai || {})
+  const ai = Object.entries(today.ai || {})
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k} ${v}`)
     .join(' · ');
   statTotalsEl.textContent =
-    `누적 — 가입자 ${tot.users || 0}명 · 공개 작품 ${tot.publicEntries || 0}개(전체 ${tot.published || 0}) · ` +
-    `챗 이용자 ${tot.chats || 0}명 · 게임 이용자 ${tot.games || 0}명 · 신고 대기 ${tot.reported || 0}건` +
-    (ai ? ` / 오늘 모델별 호출 — ${ai}` : '');
+    t('adm.totals', {
+      users: tot.users || 0,
+      publicEntries: tot.publicEntries || 0,
+      published: tot.published || 0,
+      chats: tot.chats || 0,
+      games: tot.games || 0,
+      reported: tot.reported || 0,
+    }) + (ai ? t('adm.byModel', { ai }) : '');
 }
 
 /** 운영자용 신고 목록 렌더. */
@@ -908,7 +921,7 @@ function renderAdminReports(items) {
   if (!items || !items.length) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = '신고된 항목이 없습니다.';
+    p.textContent = t('adm.noReports');
     adminListEl.appendChild(p);
     return;
   }
@@ -918,10 +931,14 @@ function renderAdminReports(items) {
     const body = document.createElement('div');
     body.className = 'gi-body';
     body.innerHTML = `<div class="gi-title"></div><div class="gi-meta"></div><div class="gi-sum"></div>`;
-    body.querySelector('.gi-title').textContent = `🚩 ${it.reportCount}건 · ${it.title}`;
+    body.querySelector('.gi-title').textContent = t('adm.reportCount', {
+      n: it.reportCount,
+      title: it.title,
+    });
     body.querySelector('.gi-meta').textContent =
-      `by ${it.ownerName} · ${VIS_LABEL[it.visibility] || it.visibility}${it.blocked ? ' · 차단됨' : ''}`;
-    body.querySelector('.gi-sum').textContent = (it.reasons || []).join(' / ') || '(사유 없음)';
+      t('adm.by', { owner: it.ownerName, vis: visLabel(it.visibility) }) +
+      (it.blocked ? t('adm.blockedSuffix') : '');
+    body.querySelector('.gi-sum').textContent = (it.reasons || []).join(' / ') || t('adm.noReason');
     card.appendChild(body);
     const act = (label, action, confirmMsg) => {
       const b = document.createElement('button');
@@ -933,13 +950,44 @@ function renderAdminReports(items) {
       });
       card.appendChild(b);
     };
-    if (it.blocked) act('차단 해제', 'unblock');
-    else act('차단', 'block', `"${it.title}"을(를) 차단할까요? 비공개로 내려가고 재공개가 막힙니다.`);
-    act('삭제', 'delete', `"${it.title}"을(를) 완전히 삭제할까요? 되돌릴 수 없습니다.`);
-    act('신고 무시', 'clear');
+    if (it.blocked) act(t('adm.unblock'), 'unblock');
+    else act(t('adm.block'), 'block', t('adm.blockAsk', { title: it.title }));
+    act(t('common.delete'), 'delete', t('adm.deleteAsk', { title: it.title }));
+    act(t('adm.ignore'), 'clear');
     adminListEl.appendChild(card);
   });
 }
+
+/**
+ * 언어 전환. UI 문구만 다시 그린다.
+ *
+ * **대화 로그와 설정 폼의 입력값은 건드리지 않는다** — 사용자가 쓴 원문이자
+ * 저장값이라, 번역했다가 되돌릴 수 없는 값이다. 갤러리 카드의 제목·소개도 같다
+ * (대신 원문 언어 뱃지가 붙는다).
+ */
+document.addEventListener('i18n:change', () => {
+  renderChatBar({
+    chats: lastChatList.chats,
+    activeId: lastChatList.activeId,
+    max: lastChatList.max,
+  });
+  updateChatModelLabel();
+  if (!chatSetupEl.classList.contains('hidden')) {
+    renderCharEditors();
+    renderImageEditors();
+    renderTagSuggestions();
+    updatePublishHint(currentChat && currentChat.published);
+  }
+  if (socket) {
+    requestGallery();
+    if (!profileEl.classList.contains('hidden')) socket.emit('profileList');
+    if (App.isAdmin) {
+      socket.emit('adminReports');
+      socket.emit('adminStats', { days: 14 });
+    }
+  }
+  if (detailItem && !detailModal.classList.contains('hidden')) openDetail(detailItem);
+});
 
 // ---------- 이벤트 ----------
 newChatBtn.addEventListener('click', () => {
@@ -987,12 +1035,12 @@ cpImageFileEl.addEventListener('change', () => {
 cpSaveBtn.addEventListener('click', () => {
   const def = collectDef();
   if (!def.characters.length) {
-    chatSetupErrorEl.textContent = '이름 있는 캐릭터가 최소 1명 필요합니다.';
+    chatSetupErrorEl.textContent = t('cp.needChar');
     chatSetupErrorEl.classList.remove('hidden');
     return;
   }
   if (def.characters.some((c) => !c.description)) {
-    chatSetupErrorEl.textContent = '각 캐릭터의 설명을 입력하세요.';
+    chatSetupErrorEl.textContent = t('cp.needCharDesc');
     chatSetupErrorEl.classList.remove('hidden');
     return;
   }
@@ -1003,7 +1051,7 @@ cpSaveBtn.addEventListener('click', () => {
 cpPublishBtn.addEventListener('click', () => {
   const def = collectDef();
   if (!def.characters.length) {
-    chatSetupErrorEl.textContent = '공개하려면 이름 있는 캐릭터가 최소 1명 필요합니다.';
+    chatSetupErrorEl.textContent = t('cp.needCharPublish');
     chatSetupErrorEl.classList.remove('hidden');
     return;
   }

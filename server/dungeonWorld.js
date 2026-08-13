@@ -296,6 +296,17 @@ const MOVES_SUMMARY = `던전 월드 판정 규칙 요지 (원문 아님, 요약
 - 근력 행사(Defy/힘쓰기): 무거운 것을 들거나 부수는 등 순수 힘. STR.
 - 전투에서 피해를 입으면 코드가 HP를 깎는다. 갑옷(armor)은 받는 피해를 줄인다.`;
 
+/** 위 요지의 영어판. 영어로 진행하는 게임의 시스템 프롬프트에 들어간다. */
+const MOVES_SUMMARY_EN = `Dungeon World resolution, in brief (a summary, not the rulebook text):
+- Roll 2d6 + the relevant stat modifier. 10+ = full success, 7-9 = success with a cost or condition, 6- = failure and things get worse.
+- Defy Danger: act in the teeth of danger. Use the stat that fits — DEX to dodge or sneak, STR to hold on by force, CON to endure, INT for quick thinking, WIS for composure, CHA for nerve.
+- Hack and Slash: attack an enemy in melee. STR. Even on a success the enemy may strike back.
+- Volley: attack with a ranged weapon. DEX.
+- Discern Realities: study your surroundings for clues. WIS.
+- Parley: move someone with leverage. CHA.
+- Brute force (lifting, smashing, raw strength): STR.
+- When you take damage in combat the code subtracts HP. Armor reduces the damage you take.`;
+
 /** 배분된 stats가 표준 배열의 유효한 배치인지 검증(값의 다중집합 일치). */
 function isValidStatArray(stats) {
   if (!stats || typeof stats !== 'object') return false;
@@ -384,6 +395,7 @@ module.exports = {
   STAT_KEYS,
   STANDARD_ARRAY,
   MOVES_SUMMARY,
+  MOVES_SUMMARY_EN,
   ADVANCED_MOVES,
   createCharacter,
   ensureCharacterFields,
