@@ -918,7 +918,7 @@ io.on('connection', (socket) => {
     const sort = (payload && payload.sort) || 'recent';
     const tag = (payload && payload.tag) || '';
     emit('gallery', {
-      items: publish.listPublic({ sort, tag }),
+      items: publish.listPublic({ sort, tag, lang: uiLang }),
       tags: publish.listTags(),
       sort,
       tag,
@@ -927,7 +927,7 @@ io.on('connection', (socket) => {
 
   // 내 프로필: 내가 공개한 작품 + 합계
   socket.on('profileList', () => {
-    const mine = publish.listMine(userId);
+    const mine = publish.listMine(userId, uiLang);
     emit('profile', {
       username: user ? user.username : '',
       mine,
@@ -1031,8 +1031,8 @@ io.on('connection', (socket) => {
       return emit('error', { message: e.message });
     }
     emit('adminReports', { items: publish.listReported() });
-    emit('gallery', { items: publish.listPublic(), tags: publish.listTags(), sort: 'recent', tag: '' });
-    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId), totals: null });
+    emit('gallery', { items: publish.listPublic({ lang: uiLang }), tags: publish.listTags(), sort: 'recent', tag: '' });
+    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId, uiLang), totals: null });
   });
 
   // 갤러리의 '내가 공개한 것'에서 바로 공개 중단(연결된 챗이 없어도 가능)
@@ -1047,8 +1047,8 @@ io.on('connection', (socket) => {
       if (c.publishedId === (payload && payload.id)) c.publishedId = null;
     });
     persistChats(userId, uc);
-    emit('gallery', { items: publish.listPublic(), tags: publish.listTags(), sort: 'recent', tag: '' });
-    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId), totals: null });
+    emit('gallery', { items: publish.listPublic({ lang: uiLang }), tags: publish.listTags(), sort: 'recent', tag: '' });
+    emit('profile', { username: user ? user.username : '', mine: publish.listMine(userId, uiLang), totals: null });
   });
 
   // 갤러리 항목을 내 대화로 가져와 플레이 (정의는 복사, 대화는 각자 별도)
@@ -1059,7 +1059,9 @@ io.on('connection', (socket) => {
       return emit('error', { message: `캐릭터 챗은 최대 ${chatStore.MAX_CHATS}개까지 저장돼요.` });
     }
     const cid = newId();
-    const def = chat.normalizeDef(entry.def);
+    // 영어판이 있는 샘플이면 그쪽을 복사한다 — 이미지 태그까지 영어판 안에서
+    // 자기완결적이라 프롬프트와 매칭이 어긋나지 않는다.
+    const def = chat.normalizeDef(publish.defFor(entry, uiLang));
     uc.chats[cid] = {
       id: cid,
       ai: defaultAiFor(user),

@@ -437,6 +437,9 @@
       'tag.일상': '일상',
       'tag.느와르': '느와르',
       'tag.코미디': '코미디',
+      'tag.SF': 'SF',
+      'tag.힐링': '힐링',
+      'tag.범죄': '범죄',
 
       // ── 캐릭터 챗: 프로필 ──
       'prof.title': '👤 내 프로필',
@@ -907,6 +910,9 @@
       'tag.일상': 'Slice of life',
       'tag.느와르': 'Noir',
       'tag.코미디': 'Comedy',
+      'tag.SF': 'Sci-Fi',
+      'tag.힐링': 'Cozy',
+      'tag.범죄': 'Crime',
 
       // ── character chat: profile ──
       'prof.title': '👤 My profile',

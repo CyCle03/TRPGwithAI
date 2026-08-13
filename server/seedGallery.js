@@ -5,6 +5,7 @@ const publish = require('./publish');
 const chat = require('./chat');
 const uploads = require('./uploads');
 const auth = require('./auth');
+const { SAMPLE_EN } = require('./seedGalleryEn');
 
 /** 저장소에 포함된 샘플 이미지 → 고정 id로 등록해 정의에 넣는다. */
 const SAMPLE_IMAGES = [
@@ -485,6 +486,7 @@ function seed() {
   ensureSampleTags(); // 첫 샘플에 장르 태그 back-fill
   ensureExtraSamples(); // 장르별 샘플 등록
   attachSampleImages(); // 나중에 그려 넣은 이미지 파일을 샘플에 붙임
+  syncEnglishDefs(); // 샘플의 영어판을 최신 이미지 목록에 맞춰 갱신
   transferSampleOwner(); // 실제 계정으로 소유권 이관
 }
 
@@ -683,6 +685,53 @@ function ensureSampleEntry() {
     console.log('🖼️  샘플 세계관에 이미지', missing.length, '장을 추가했습니다(총', def.images.length + '장).');
   } catch (e) {
     console.error('갤러리 샘플 등록 실패:', e.message);
+  }
+}
+
+/**
+ * 샘플 세계관의 영어판(defEn)을 채워 넣는다.
+ *
+ * **일회성 seed 키를 쓰지 않고 매 기동마다 맞춘다.** 샘플 그림은 나중에 그려 붙이는
+ * 방식이라(attachSampleImages) 한국어판의 이미지 목록이 계속 늘어나는데,
+ * 영어판을 한 번만 만들어 두면 그때부터 이미지가 어긋난다. 실제로 바뀐 게 있을 때만
+ * 저장하므로 평소에는 아무 일도 하지 않는다.
+ *
+ * **이미지 목록은 한국어판에서 가져오고 태그만 영어로 바꾼다.** 그림은 언어와 무관해
+ * id 가 같고, 표에 없는 id 는 원문 태그를 그대로 둔다(사전이 없으면 원문 — 다른 곳과 같은 규약).
+ *
+ * 샘플은 우리가 쓴 글이라 영어판을 여기서 덮어쓴다. 사용자 창작 세계관은 defEn 이
+ * 없으므로 이 함수가 건드리지 않고, 원문 그대로 노출된다.
+ */
+function syncEnglishDefs() {
+  for (const [key, en] of Object.entries(SAMPLE_EN)) {
+    try {
+      const entry = key === SEED_KEY ? findSampleEntry() : findEntryBySeedId(key);
+      if (!entry || !entry.def) continue;
+      const images = (entry.def.images || []).map((im) => {
+        const m = en.images && en.images[im.id];
+        return m ? { id: im.id, tag: m.tag, description: m.description } : im;
+      });
+      const defEn = chat.normalizeDef({
+        ...en,
+        images,
+        // 커버·권장 길이는 언어와 무관한 설정이라 한국어판을 따른다.
+        coverId: entry.def.coverId || '',
+        responseLength: entry.def.responseLength,
+      });
+      if (JSON.stringify(entry.defEn || null) === JSON.stringify(defEn)) continue;
+      publish.publish({
+        pubId: entry.id,
+        ownerId: entry.ownerId,
+        ownerName: entry.ownerName,
+        def: entry.def,
+        defEn,
+        visibility: entry.visibility,
+        title: entry.title,
+      });
+      console.log(`🌏 '${entry.title}' 의 영어판을 갱신했습니다 (이미지 ${defEn.images.length}장).`);
+    } catch (e) {
+      console.error('샘플 영어판 갱신 실패:', key, e.message);
+    }
   }
 }
 

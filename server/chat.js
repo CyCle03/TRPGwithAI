@@ -282,10 +282,12 @@ function buildSystemPrompt(def, lengthOverride, opts) {
       )
       .join('\n');
     if (lang === 'en') {
+      // 예시 태그는 실제 목록의 첫 항목을 쓴다. 다른 언어의 태그를 예시로 박아 두면
+      // 모델이 그쪽을 흉내 내 목록에 없는 태그를 만들어 낸다.
       lines.push(
         `\n[${H.images}]\n` +
           list +
-          '\nWhen an image fits this reply, include [img:tag] exactly once (e.g. [img:밤바다]).' +
+          `\nWhen an image fits this reply, include [img:tag] exactly once (e.g. [img:${imgs[0].tag}]).` +
           ' Pick the location tag when the scene moves, or a character tag when that character is the focus.' +
           ' Do not repeat the tag you used in the previous reply.' +
           ' Never invent a tag that is not on the list above.' +

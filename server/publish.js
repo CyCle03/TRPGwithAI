@@ -44,7 +44,7 @@ function newPubId() {
  * 정의를 공개(또는 갱신)한다. pubId가 있으면 같은 항목을 갱신(소유자만).
  * @returns {object} 저장된 항목
  */
-function publish({ pubId, ownerId, ownerName, def, visibility, title, lang }) {
+function publish({ pubId, ownerId, ownerName, def, defEn, visibility, title, lang }) {
   if (!VISIBILITIES.includes(visibility)) throw new Error('잘못된 공개 범위입니다.');
   const db = loadAll();
   let entry = pubId ? db.entries[pubId] : null;
@@ -62,6 +62,10 @@ function publish({ pubId, ownerId, ownerName, def, visibility, title, lang }) {
     // 알려주기 위해 기록만 한다. 한 번 공개한 뒤에는 갱신해도 유지된다
     // (본문을 통째로 다시 쓰는 일은 드물고, 흔들리면 카드가 오락가락한다).
     lang: (entry && entry.lang) || (lang === 'en' ? 'en' : 'ko'),
+    // 같은 세계관의 영어판(샘플에만 있다). 사용자 창작물은 원문 하나뿐이고,
+    // 그쪽은 번역하는 대신 카드에 원문 언어 뱃지를 붙인다.
+    // 넘기지 않으면 기존 값을 그대로 둔다 — 정의만 고치는 갱신에서 영어판이 날아가지 않게.
+    defEn: defEn === undefined ? entry && entry.defEn : defEn,
     visibility,
     plays: entry ? entry.plays || 0 : 0,
     createdAt: entry ? entry.createdAt : now,
@@ -88,7 +92,7 @@ function unpublish(pubId, ownerId) {
  * @param {object} opts { sort:'recent'|'likes'|'plays', tag:string, limit:number }
  */
 function listPublic(opts = {}) {
-  const { sort = 'recent', tag = '', limit = 60 } = opts;
+  const { sort = 'recent', tag = '', limit = 60, lang } = opts;
   const db = loadAll();
   let list = Object.values(db.entries).filter((e) => e.visibility === 'public');
   if (tag) {
@@ -100,7 +104,7 @@ function listPublic(opts = {}) {
     plays: (a, b) => (b.plays || 0) - (a.plays || 0) || String(b.updatedAt).localeCompare(String(a.updatedAt)),
     recent: (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)),
   };
-  return list.sort(by[sort] || by.recent).slice(0, limit).map(summarize);
+  return list.sort(by[sort] || by.recent).slice(0, limit).map((e) => summarize(e, lang));
 }
 
 /** 공개된 작품들에 쓰인 태그 목록(많이 쓰인 순). */
@@ -173,12 +177,12 @@ function deleteComment(pubId, commentId, userId, isAdmin) {
 }
 
 /** 내가 공개한 목록. */
-function listMine(ownerId) {
+function listMine(ownerId, lang) {
   const db = loadAll();
   return Object.values(db.entries)
     .filter((e) => e.ownerId === ownerId)
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-    .map(summarize);
+    .map((e) => summarize(e, lang));
 }
 
 /**
@@ -211,16 +215,35 @@ function pickCover(def) {
   return (scene || images[0]).id;
 }
 
-/** 목록 표시용 요약(정의 전문은 제외, 대표 이미지 1장만). */
-function summarize(e) {
-  const d = e.def || {};
+/**
+ * 보는 사람의 언어에 맞는 정의. 영어판이 없으면 원문을 그대로 돌려준다
+ * (그 경우 카드에 원문 언어 뱃지가 붙는다).
+ */
+function defFor(e, lang) {
+  if (!e) return null;
+  return lang === 'en' && e.defEn ? e.defEn : e.def;
+}
+
+/** 이 항목을 그 언어로 보여줄 때, 실제로 쓰이는 정의의 언어. */
+function shownLang(e, lang) {
+  if (lang === 'en' && e.defEn) return 'en';
+  return e.lang === 'en' ? 'en' : 'ko';
+}
+
+/**
+ * 목록 표시용 요약(정의 전문은 제외, 대표 이미지 1장만).
+ * @param {string} [lang] 보는 사람의 화면 언어. 영어판이 있으면 그쪽으로 보여준다.
+ */
+function summarize(e, lang) {
+  const d = defFor(e, lang) || {};
   const chars = (d.characters || []).map((c) => c.name).filter(Boolean);
   return {
     id: e.id,
-    title: e.title,
+    title: d.worldTitle || e.title,
     ownerName: e.ownerName,
-    // 원문 언어(없으면 한국어) — 카드에 뱃지로 붙는다.
-    lang: e.lang === 'en' ? 'en' : 'ko',
+    // 실제로 보여주는 정의의 언어. 화면 언어와 다를 때만 카드에 뱃지가 붙으므로,
+    // 영어판이 있는 샘플에는 뱃지가 뜨지 않는다.
+    lang: shownLang(e, lang),
     visibility: e.visibility,
     plays: e.plays || 0,
     updatedAt: e.updatedAt,
@@ -378,6 +401,7 @@ function listAll() {
 }
 
 module.exports = {
+  defFor,
   publish,
   unpublish,
   listPublic,
