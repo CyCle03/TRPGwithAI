@@ -74,7 +74,12 @@
   }
   async function authApi(path, body) {
     const origin = await authOrigin();
-    const headers = { 'X-Lang': I18N.lang };
+    // api() 와 달리 X-Lang 을 보내지 않는다. auth 는 다른 오리진이라 이 헤더가
+    // 붙는 순간 프리플라이트가 뜨는데, auth 의 Access-Control-Allow-Headers 는
+    // Content-Type 하나뿐이라 요청이 통째로 막힌다("Failed to fetch" → 로그인 불가).
+    // auth 는 어차피 이 헤더를 보지 않고 늘 한국어를 보내므로, 언어는 아래에서
+    // 받는 쪽이 맞춘다.
+    const headers = {};
     if (body) headers['Content-Type'] = 'application/json';
     const res = await fetch(origin + path, {
       method: body ? 'POST' : 'GET',
