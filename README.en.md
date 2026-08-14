@@ -149,7 +149,15 @@ public/
   play.html/.js    /play  Dungeon World — character creation wizard + game screen
   chat.html/.js    /chat  Character Chat — bottom-tab app shell (Browse, My Chats, Create, Profile) + conversation screen
   style.css        Styles shared by all three pages (chat-only app shell stays scoped inside `body.app-chat`)
+  favicon.svg      Tab icon source (a d20). Change it and re-run the script below
+  favicon.ico      favicon.svg rasterised to 32x32 — what crawlers that ignore <link> hit
+scripts/
+  build-favicon.js favicon.svg → favicon.ico, zlib only, no dependencies (ICO carries a PNG as-is)
 ```
+
+`favicon.ico` is generated but committed, because there is no build step. If you change the
+shape, edit `public/favicon.svg` **and** `scripts/build-favicon.js` together, re-run it, and
+commit the result alongside.
 
 The three pages live on the same server and the same origin. Accounts, API keys and socket
 authentication (cookies) are shared as-is; only the screens and scripts are separate.
@@ -193,6 +201,24 @@ Rules specific to this app:
   express `res.json` wrapper and the socket `emit('error')` — and anything missing from the table
   goes out in Korean. The language arrives via the REST `X-Lang` header and the socket handshake
   query (plus a `setLang` event).
+- **Never send `X-Lang` to the single sign-on service — use the query (`?lang=`) instead.**
+  Unlike `api()`, `authApi()` calls **a different origin** (auth.elcherlab.com). The moment a
+  custom header is attached a CORS preflight fires, and auth's `Access-Control-Allow-Headers` is
+  `Content-Type` only, so the whole request is blocked.
+
+  This actually happened: the i18n work added `X-Lang` to `authApi` too, and **login was
+  completely dead with "Failed to fetch" regardless of language.** The landing page still looked
+  fine, so it went unnoticed for a while.
+
+  ```
+  Request header field x-lang is not allowed by Access-Control-Allow-Headers
+  ```
+
+  auth reads `?lang=en` and returns its error messages in that language. `api()` is same-origin
+  and the server really does read the header, so it stays as it is.
+- **Opening the page is not a test of login.** That is exactly why the failure above went
+  unnoticed. After touching this, click through it: a wrong password down to the error message,
+  and a correct password down to a successful sign-in.
 
 ## Storage and security
 

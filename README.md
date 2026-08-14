@@ -119,7 +119,14 @@ public/
   play.html/.js    /play  던전 월드 — 캐릭터 생성 위저드 + 게임 화면
   chat.html/.js    /chat  캐릭터 챗 — 하단 탭 앱 셸(둘러보기·내 대화·만들기·프로필) + 대화 화면
   style.css        세 페이지 공용 스타일 (챗 전용 앱 셸은 `body.app-chat` 스코프 안에만 둔다)
+  favicon.svg      탭 아이콘 원본 (d20). 바꾸면 아래 스크립트를 다시 돌린다
+  favicon.ico      favicon.svg 를 32x32 로 구운 생성물 — 링크를 안 읽는 크롤러가 때리는 자리
+scripts/
+  build-favicon.js favicon.svg → favicon.ico. 의존성 없이 zlib 만 쓴다(ICO 는 PNG 를 그대로 담는다)
 ```
+
+`favicon.ico` 는 생성물이지만 빌드 단계가 없어 저장소에 커밋한다. 모양을 바꿨으면
+`public/favicon.svg` 와 `scripts/build-favicon.js` 를 **함께** 고치고 다시 돌린 뒤 결과를 같이 커밋할 것.
 
 세 페이지는 같은 서버·같은 출처에 있다. 계정·API 키·소켓 인증(쿠키)은 그대로 공유하고,
 화면과 스크립트만 갈라져 있다.
@@ -157,6 +164,23 @@ public/
   가 한국어 원문 → 영어를 찾는다. 경계는 express `res.json` 래핑과 소켓 `emit('error')` 둘뿐이고,
   사전에 없으면 원문이 그대로 나간다. 언어는 REST `X-Lang` 헤더와 소켓 handshake query
   (+`setLang` 이벤트)로 받는다.
+- **통합 인증(auth)에는 `X-Lang` 을 보내면 안 된다. 쿼리(`?lang=`)로 보낸다.**
+  `authApi()` 는 `api()` 와 달리 **다른 오리진**(auth.elcherlab.com)을 부른다. 커스텀 헤더가
+  붙는 순간 CORS 프리플라이트가 뜨는데 auth 의 `Access-Control-Allow-Headers` 는
+  `Content-Type` 뿐이라 요청이 통째로 막힌다.
+
+  실제로 이 사고가 났다 — i18n 을 붙이면서 `authApi` 에도 `X-Lang` 을 달았고, **로그인이
+  언어와 상관없이 "Failed to fetch" 로 완전히 죽어 있었다.** 랜딩 화면은 멀쩡해 보여서
+  한동안 아무도 몰랐다.
+
+  ```
+  Request header field x-lang is not allowed by Access-Control-Allow-Headers
+  ```
+
+  auth 는 `?lang=en` 을 보고 오류 문구를 그 언어로 내려준다. `api()` 는 같은 오리진이고
+  서버가 헤더를 실제로 읽으므로 그대로 둔다.
+- **로그인은 화면을 여는 것만으로 검사되지 않는다.** 위 사고가 그래서 늦게 발견됐다.
+  고치고 나면 **틀린 비밀번호로 오류 문구까지, 맞는 비밀번호로 로그인 성공까지** 눌러 볼 것.
 
 ## 저장·보안
 
