@@ -8,6 +8,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>캐릭터 챗</title>
     <link rel="stylesheet" href="/style.css" />
+    <!-- 링크를 못 읽는 클라이언트·크롤러는 /favicon.ico 를 그대로 때리므로 둘 다 둔다.
+         .ico 는 생성물 — 모양을 바꾸면 favicon.svg 와 함께 고치고
+         `node scripts/build-favicon.js` 로 다시 만들 것. -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <!-- app-chat: 챗 페이지 전용 앱 셸 스타일을 여는 스코프. play.html 은 영향받지 않는다. -->
   <body class="app-chat">
