@@ -229,7 +229,8 @@ app.post('/internal/export-user', (req, res) => {
   const userId = req.body && req.body.userId;
   if (typeof userId !== 'string' || !userId) return res.status(400).json({ error: 'userId 가 필요합니다.' });
   try {
-    res.json(purge.exportUser(userId, auth.getUserById(userId)));
+    // lang 은 auth 가 본문에 실어 보낸다(모르는 값이면 한국어).
+    res.json(purge.exportUser(userId, auth.getUserById(userId), req.body && req.body.lang));
   } catch (e) {
     console.error('[export-user]', e.message);
     res.status(500).json({ error: e.message });

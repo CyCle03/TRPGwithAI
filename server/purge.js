@@ -166,9 +166,22 @@ function purgeUser(userId, deleteAccount) {
  * @param {string} userId 통합 계정 uuid
  * @param {object|null} account users.json 의 해당 항목(없으면 null)
  */
-function exportUser(userId, account) {
+/**
+ * 열람권(제35조) 문서. `lang === 'en'` 이면 영어 키로 된 한 벌을 만든다.
+ *
+ * 키를 그때그때 번역하지 않고 문서를 두 벌로 두는 이유는 auth 쪽과 같다 — 이건 받아서
+ * 보관하는 파일이라, 같은 키를 언어에 따라 바꾸면 이미 받아 둔 파일과 형식이 갈린다.
+ * 대화·세션 내용(chats·sessions)과 갤러리 항목 자체는 이용자가 만든 데이터라 손대지 않는다.
+ */
+function exportUser(userId, account, lang) {
+  const en = lang === 'en';
   const uid = safeName(userId);
   const settings = (account && account.settings) || {};
+
+  // 갤러리 항목에 붙이는 이름표. 항목 내용(...e)은 이용자 데이터라 그대로 둔다.
+  const K = en
+    ? { pubId: 'publishedId', others: 'othersEntry', title: 'title', myComments: 'myComments', myLike: 'myLike' }
+    : { pubId: '공개id', others: '남의항목', title: '제목', myComments: '내댓글', myLike: '내추천' };
 
   const published = [];
   const db = readJson(PUBLISHED, null);
@@ -176,18 +189,18 @@ function exportUser(userId, account) {
     for (const [pubId, e] of Object.entries(db.entries)) {
       if (!e) continue;
       if (e.ownerId === userId) {
-        published.push({ 공개id: pubId, ...e });
+        published.push({ [K.pubId]: pubId, ...e });
       } else if (Array.isArray(e.comments) && e.comments.some((c) => c && c.userId === userId)) {
         // 남의 공개물에 남긴 내 댓글도 내 개인정보다.
         published.push({
-          공개id: pubId,
-          남의항목: true,
-          제목: e.title || null,
-          내댓글: e.comments.filter((c) => c && c.userId === userId),
-          내추천: !!(e.likedBy && e.likedBy[userId]),
+          [K.pubId]: pubId,
+          [K.others]: true,
+          [K.title]: e.title || null,
+          [K.myComments]: e.comments.filter((c) => c && c.userId === userId),
+          [K.myLike]: !!(e.likedBy && e.likedBy[userId]),
         });
       } else if (e.likedBy && e.likedBy[userId]) {
-        published.push({ 공개id: pubId, 남의항목: true, 제목: e.title || null, 내추천: true });
+        published.push({ [K.pubId]: pubId, [K.others]: true, [K.title]: e.title || null, [K.myLike]: true });
       }
     }
   }
@@ -201,6 +214,31 @@ function exportUser(userId, account) {
   for (const blob of [chats, sessions, published]) {
     if (!blob) continue;
     for (const id of idsReferencedIn(JSON.stringify(blob), uploads.keys())) mine.add(id);
+  }
+
+  const images = [...mine].map((id) => `https://gm.elcherlab.com/img/${id}`);
+
+  if (en) {
+    return {
+      service: 'AI GM Dungeon World · Character Chat (gm.elcherlab.com)',
+      settings: {
+        provider: settings.provider || null,
+        model: settings.model || null,
+        endpoint: settings.baseURL || null,
+        // 값이 아니라 어디에 등록돼 있는지만.
+        registeredApiKeys: Object.keys(settings.keys || {}),
+        overseasTransferConsent: settings.xferConsent
+          ? { agreed: true, agreedAt: settings.xferConsentAt || null }
+          : { agreed: false },
+      },
+      characterChats: chats,
+      gameSessions: sessions,
+      gallery: published,
+      uploadedImages: images,
+      note:
+        'The values of your AI API keys are not included. Once stored, a key is built so that it ' +
+        'cannot be read back by any route (Privacy Policy 3.1, Korean).',
+    };
   }
 
   return {
@@ -218,7 +256,7 @@ function exportUser(userId, account) {
     캐릭터챗: chats,
     게임세션: sessions,
     갤러리: published,
-    업로드이미지: [...mine].map((id) => `https://gm.elcherlab.com/img/${id}`),
+    업로드이미지: images,
     참고:
       'AI API 키의 값은 포함하지 않습니다. 한 번 저장한 키는 어떤 경로로도 다시 ' +
       '내려받을 수 없도록 만들어져 있습니다(개인정보처리방침 3.1).',
