@@ -35,6 +35,30 @@ jobs:
 
       # 브라우저로 나가는 코드에만 건다. server/ 의 console.log 는 정상적인
       # 서버 로깅이라(journald 로 간다) 대상이 아니다.
+      # 구문 오류 하나가 모듈 그래프 전체를 끌어내린다. pet 이 2026-08-13 에 이렇게 죽었다 —
+      # i18n 작업이 닫히지 않은 호출을 남겼는데 CI 가 잡지 못했다.
+      # 파싱이 멈춘 파일 하나 때문에 첫 화면부터 통째로 비어 버리는데,
+      # 테스트는 그 파일을 import 하지 않으면 아무것도 모른 채 통과한다.
+      # 그래서 실행이 아니라 '파싱만' 파일별로 확인한다 — DOM 도 서버도 필요 없다.
+      # (node --check 는 확장자로 모듈 여부를 보므로 .mjs 로 복사해서 건다.)
+      - name: 구문 검사 (브라우저 모듈 전부)
+        run: |
+          tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+          n=0; fail=0
+          while IFS= read -r f; do
+            n=$((n + 1))
+            cp "$f" "$tmp/m.mjs"
+            if ! out=$(node --check "$tmp/m.mjs" 2>&1); then
+              echo "구문 오류: $f"
+              echo "$out" | sed "s|$tmp/m.mjs|$f|g" | head -5
+              fail=1
+            fi
+          done < <(find public -name '*.js')
+          # 경로가 바뀌어 아무것도 안 걸리면 검사가 조용히 사라진다. 그것도 실패로 본다.
+          [ "$n" -gt 0 ] || { echo "검사할 파일을 찾지 못했습니다 — find 경로를 확인하세요."; exit 1; }
+          [ "$fail" = 0 ] || { echo "구문 검사 실패"; exit 1; }
+          echo "구문 검사 통과 — ${n}개 모듈"
+
       - name: 개발 로그 검사 (브라우저 코드)
         run: |
           if grep -rn 'console\.log\|\bdebugger\b' public/ --include='*.js'; then
