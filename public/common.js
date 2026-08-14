@@ -83,7 +83,9 @@
       credentials: 'include',
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || t('common.requestFailed'));
+    // auth 는 여러 앱이 함께 쓰는 별개의 사업자라 X-Lang 을 보지 않고 늘 한국어를
+    // 보낸다. 이 저장소 서버(api)와 달리 받는 쪽에서 언어를 맞춰야 한다.
+    if (!res.ok) throw new Error(I18N.translateServerError(data.error) || t('common.requestFailed'));
     return data;
   }
   App.authApi = authApi;
