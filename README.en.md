@@ -134,6 +134,7 @@ server/
   seedGalleryEn.js English editions of the sample worlds (user-made worlds are never translated)
   uploads.js       Image upload storage/retrieval (data/uploads/)
   purge.js         Deletes a closed account's data and sweeps uploads nothing references
+                   + the right-of-access export document, built in Korean and in English
   metrics.js       Daily visit statistics (IPs stored only as HMAC hashes)
   providers/
     geminiProvider.js     Gemini calls (responseSchema)
@@ -201,6 +202,11 @@ Rules specific to this app:
   express `res.json` wrapper and the socket `emit('error')` — and anything missing from the table
   goes out in Korean. The language arrives via the REST `X-Lang` header and the socket handshake
   query (plus a `setLang` event).
+- **The export document comes in two versions too.** `purge.exportUser(userId, account, lang)`
+  builds English keys when given `en`. The labels on gallery entries are translated as well,
+  but the entries themselves and the chat/session content are user-created data and are left
+  alone. The language arrives in the **body** of auth's internal call — not a header, since
+  this is a loopback call where CORS does not apply and the body is already parsed.
 - **Never send `X-Lang` to the single sign-on service — use the query (`?lang=`) instead.**
   Unlike `api()`, `authApi()` calls **a different origin** (auth.elcherlab.com). The moment a
   custom header is attached a CORS preflight fires, and auth's `Access-Control-Allow-Headers` is

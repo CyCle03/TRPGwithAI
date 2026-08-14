@@ -104,6 +104,7 @@ server/
   seedGalleryEn.js 샘플 세계관의 영어판 (사용자 창작물은 번역하지 않는다)
   uploads.js       이미지 업로드 저장/조회 (data/uploads/)
   purge.js         탈퇴 계정의 데이터 삭제 · 어디서도 참조되지 않는 업로드 정리
+                   + 열람권(내 데이터 내려받기) 문서 — 한국어·영어 두 벌로 만든다
   metrics.js       일자별 방문 통계 (IP는 HMAC 해시로만 저장)
   providers/
     geminiProvider.js     Gemini 호출 (responseSchema)
@@ -164,6 +165,10 @@ scripts/
   가 한국어 원문 → 영어를 찾는다. 경계는 express `res.json` 래핑과 소켓 `emit('error')` 둘뿐이고,
   사전에 없으면 원문이 그대로 나간다. 언어는 REST `X-Lang` 헤더와 소켓 handshake query
   (+`setLang` 이벤트)로 받는다.
+- **열람권 문서도 두 벌이다.** `purge.exportUser(userId, account, lang)` 가 `en` 이면 영어 키로
+  만든다. 갤러리 항목 이름표(공개id·남의항목·제목·내댓글·내추천)까지 옮기되, 대화·세션 내용과
+  항목 자체는 이용자가 만든 데이터라 손대지 않는다. 언어는 auth 가 내부 호출 **본문**에 실어
+  보낸다(헤더가 아니다 — 루프백이라 CORS 와 무관하고 본문은 이미 파싱하고 있다).
 - **통합 인증(auth)에는 `X-Lang` 을 보내면 안 된다. 쿼리(`?lang=`)로 보낸다.**
   `authApi()` 는 `api()` 와 달리 **다른 오리진**(auth.elcherlab.com)을 부른다. 커스텀 헤더가
   붙는 순간 CORS 프리플라이트가 뜨는데 auth 의 `Access-Control-Allow-Headers` 는
