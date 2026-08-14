@@ -1041,6 +1041,11 @@
         set(el, t(el.getAttribute(attr)));
       });
     });
+    // 다른 서브도메인으로 넘어가는 링크에 지금 언어를 실어 보낸다.
+    // 쿠키를 쓰지 않으므로(방침 9.1) 언어는 이렇게만 전달된다.
+    scope.querySelectorAll('[data-langhref]').forEach((el) => {
+      el.href = withLang(el.getAttribute('data-langhref'));
+    });
     if (scope === document || scope === document.body) {
       document.documentElement.setAttribute('lang', lang);
       const titleKey = document.documentElement.getAttribute('data-i18n-doctitle');
