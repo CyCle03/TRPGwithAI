@@ -202,6 +202,9 @@ Rules specific to this app:
   express `res.json` wrapper and the socket `emit('error')` — and anything missing from the table
   goes out in Korean. The language arrives via the REST `X-Lang` header and the socket handshake
   query (plus a `setLang` event).
+- **Tag the "My account" link with `data-langhref`.** `apply()` rewrites that address through
+  `withLang()` so it carries the current language. Since no cookie is used, this is the only way
+  the language reaches a subdomain.
 - **The export document comes in two versions too.** `purge.exportUser(userId, account, lang)`
   builds English keys when given `en`. The labels on gallery entries are translated as well,
   but the entries themselves and the chat/session content are user-created data and are left
