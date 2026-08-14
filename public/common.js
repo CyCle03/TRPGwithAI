@@ -74,22 +74,22 @@
   }
   async function authApi(path, body) {
     const origin = await authOrigin();
-    // api() 와 달리 X-Lang 을 보내지 않는다. auth 는 다른 오리진이라 이 헤더가
-    // 붙는 순간 프리플라이트가 뜨는데, auth 의 Access-Control-Allow-Headers 는
+    // 언어는 헤더가 아니라 쿼리로 넘긴다. api() 처럼 X-Lang 을 붙이면 auth 는 다른
+    // 오리진이라 프리플라이트가 뜨는데, auth 의 Access-Control-Allow-Headers 는
     // Content-Type 하나뿐이라 요청이 통째로 막힌다("Failed to fetch" → 로그인 불가).
-    // auth 는 어차피 이 헤더를 보지 않고 늘 한국어를 보내므로, 언어는 아래에서
-    // 받는 쪽이 맞춘다.
+    // 쿼리는 CORS 를 건드리지 않는다.
     const headers = {};
     if (body) headers['Content-Type'] = 'application/json';
-    const res = await fetch(origin + path, {
+    const url = origin + path + (path.includes('?') ? '&' : '?') + 'lang=' + I18N.lang;
+    const res = await fetch(url, {
       method: body ? 'POST' : 'GET',
       headers,
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'include',
     });
     const data = await res.json().catch(() => ({}));
-    // auth 는 여러 앱이 함께 쓰는 별개의 사업자라 X-Lang 을 보지 않고 늘 한국어를
-    // 보낸다. 이 저장소 서버(api)와 달리 받는 쪽에서 언어를 맞춰야 한다.
+    // auth 가 위 lang 을 보고 맞춰 보내준다. translateServerError 는 그 앞 세대
+    // auth 나 캐시된 옛 번들을 만났을 때를 위한 그물이다 — 이미 영어면 그대로 지나간다.
     if (!res.ok) throw new Error(I18N.translateServerError(data.error) || t('common.requestFailed'));
     return data;
   }
