@@ -1018,43 +1018,6 @@
     return fallback;
   }
 
-  /**
-   * 통합 인증(auth.elcherlab.com)이 보낸 오류 문구를 현재 언어로 옮긴다.
-   *
-   * 이 저장소의 서버는 X-Lang 헤더를 보고 언어를 맞춰 내려주지만(messages.js),
-   * auth 는 여러 앱이 함께 쓰는 별개의 사업자라 헤더를 보지 않고 늘 한국어를
-   * 보낸다. 그래서 authApi 로 들어온 문구만 받는 쪽에서 맞춘다.
-   *
-   * 문장이 키다. auth 의 문구를 고치면 여기도 같이 고쳐야 하고, 모르는 문장은
-   * 원문 그대로 나간다(빈 화면보다는 낫다). cc·pet·bm·pc 와 같은 방식이다.
-   */
-  const SERVER_ERRORS_EN = {
-    '가입 처리 중 오류가 발생했습니다.': 'Something went wrong while signing up.',
-    '로그인 처리 중 오류가 발생했습니다.': 'Something went wrong while signing in.',
-    '로그인이 필요합니다.': 'You need to sign in.',
-    '만 14세 이상인지 확인해 주세요. 만 14세 미만은 가입할 수 없습니다.':
-      'Please confirm you are 14 or older. Under-14s cannot sign up.',
-    '비밀번호 변경 중 오류가 발생했습니다.': 'Something went wrong while changing your password.',
-    '비밀번호가 올바르지 않습니다.': 'That password is not correct.',
-    '비밀번호는 6자 이상이어야 합니다.': 'The password must be at least 6 characters.',
-    '새 비밀번호는 6자 이상이어야 합니다.': 'The new password must be at least 6 characters.',
-    '시도가 너무 잦습니다. 잠시 후 다시 시도하세요.': 'Too many attempts. Please try again in a moment.',
-    '아이디 또는 비밀번호가 올바르지 않습니다.': 'That ID or password is not correct.',
-    '아이디는 영문·숫자·밑줄 3~20자여야 합니다.':
-      'The ID must be 3-20 characters: letters, digits or underscore.',
-    '아이디와 비밀번호를 입력하세요.': 'Enter your ID and password.',
-    '이미 사용 중인 아이디입니다.': 'That ID is already taken.',
-    '지금 쓰는 비밀번호와 같습니다.': 'That is the password you are already using.',
-    '탈퇴 처리 중 오류가 발생했습니다.': 'Something went wrong while deleting your account.',
-    '현재 비밀번호가 올바르지 않습니다.': 'Your current password is not correct.',
-  };
-
-  /** auth 문구를 현재 언어로. 한국어이거나 모르는 문장이면 원문 그대로. */
-  function translateServerError(msg) {
-    if (lang === 'ko' || !msg) return msg;
-    return SERVER_ERRORS_EN[msg] || msg;
-  }
-
   // ---------- 정적 마크업 적용 ----------
   /**
    * data-i18n           → textContent
@@ -1114,7 +1077,6 @@
     LANGS,
     t,
     tOr,
-    translateServerError,
     apply,
     setLang,
     withLang,

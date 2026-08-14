@@ -88,9 +88,8 @@
       credentials: 'include',
     });
     const data = await res.json().catch(() => ({}));
-    // auth 가 위 lang 을 보고 맞춰 보내준다. translateServerError 는 그 앞 세대
-    // auth 나 캐시된 옛 번들을 만났을 때를 위한 그물이다 — 이미 영어면 그대로 지나간다.
-    if (!res.ok) throw new Error(I18N.translateServerError(data.error) || t('common.requestFailed'));
+    // 문구는 auth 가 위 lang 을 보고 이미 맞춰 보낸다 — 여기서 다시 옮기지 않는다.
+    if (!res.ok) throw new Error(data.error || t('common.requestFailed'));
     return data;
   }
   App.authApi = authApi;
