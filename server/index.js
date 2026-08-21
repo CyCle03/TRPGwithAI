@@ -237,19 +237,40 @@ app.post('/internal/export-user', (req, res) => {
   }
 });
 
-// 실제 사용 가능한 모델 목록 (등록된 키로 조회, 과금 없음)
-app.post('/api/models', async (req, res) => {
+/**
+ * 모델 목록·연결 테스트가 똑같이 하던 앞단 검사.
+ *
+ * 로그인 → 아는 제공자인지 → 그 제공자의 설정(키·baseURL) → 이관 차단 안내.
+ * 두 경로가 여덟 줄을 각자 적고 있었는데, 한쪽에서 차단 검사를 빠뜨리면
+ * 그 경로만 막히지 않는다.
+ *
+ * `getAiConfig` 가 던질 수 있어 **부르는 쪽 try 안에서** 부른다(예전과 같이
+ * 그 오류는 400 으로 나간다).
+ *
+ * @returns {{uid, provider, cfg}} 통과. 아니면 그대로 내보낼 `{status, error}`.
+ */
+function requireProviderConfig(req) {
   const uid = userIdFromReq(req);
-  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
+  if (!uid) return { status: 401, error: '로그인이 필요합니다.' };
+
   const { provider } = req.body || {};
   if (!aiGM.PROVIDER_NAMES.includes(provider)) {
-    return res.status(400).json({ error: '알 수 없는 제공자입니다.' });
+    return { status: 400, error: '알 수 없는 제공자입니다.' };
   }
+
+  const cfg = auth.getAiConfig(uid, provider);
+  const blocked = auth.xferBlockMessage(provider, cfg);
+  if (blocked) return { status: 400, error: blocked };
+
+  return { uid, provider, cfg };
+}
+
+// 실제 사용 가능한 모델 목록 (등록된 키로 조회, 과금 없음)
+app.post('/api/models', async (req, res) => {
   try {
-    const cfg = auth.getAiConfig(uid, provider);
-    const blocked = auth.xferBlockMessage(provider, cfg);
-    if (blocked) return res.status(400).json({ error: blocked });
-    const models = await aiGM.listModels(provider, cfg);
+    const gate = requireProviderConfig(req);
+    if (gate.error) return res.status(gate.status).json({ error: gate.error });
+    const models = await aiGM.listModels(gate.provider, gate.cfg);
     res.json({ models });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -258,21 +279,15 @@ app.post('/api/models', async (req, res) => {
 
 // 연결 테스트: 아주 짧은 요청 1회로 실제 호출 가능 여부(크레딧·한도 포함) 확인
 app.post('/api/model-test', async (req, res) => {
-  const uid = userIdFromReq(req);
-  if (!uid) return res.status(401).json({ error: '로그인이 필요합니다.' });
-  const { provider, model } = req.body || {};
-  if (!aiGM.PROVIDER_NAMES.includes(provider)) {
-    return res.status(400).json({ error: '알 수 없는 제공자입니다.' });
-  }
   try {
-    const cfg = auth.getAiConfig(uid, provider);
-    const blocked = auth.xferBlockMessage(provider, cfg);
-    if (blocked) return res.status(400).json({ error: blocked });
+    const gate = requireProviderConfig(req);
+    if (gate.error) return res.status(gate.status).json({ error: gate.error });
+    const { model } = req.body || {};
     const sample = await aiGM.testModel({
-      provider,
+      provider: gate.provider,
       model: typeof model === 'string' ? model.trim() : '',
-      apiKey: cfg.apiKey,
-      baseURL: cfg.baseURL,
+      apiKey: gate.cfg.apiKey,
+      baseURL: gate.cfg.baseURL,
     });
     res.json({ ok: true, sample });
   } catch (e) {

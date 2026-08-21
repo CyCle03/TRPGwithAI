@@ -34,6 +34,34 @@ function toOpenAIMessages(system, messages) {
   ];
 }
 
+/**
+ * /chat/completions 요청 몸통. 단발(chat)과 스트리밍(chatStream)이 함께 쓴다.
+ *
+ * 둘이 같은 조립을 각자 하고 있었다 — 특히 `noThink` 는 추론형 모델이 생각에만
+ * 토큰을 쓰고 본문을 못 내는 것을 막는 옵션인데, 한쪽에만 넣으면 그 경로에서만
+ * 빈 응답이 돌아온다.
+ */
+function buildChatBody({ model, defaultModel, systemText, messages, jsonMode, maxTokens, noThink, stream }) {
+  const body = {
+    model: model || defaultModel,
+    messages: toOpenAIMessages(systemText, messages),
+  };
+  if (stream) body.stream = true;
+  if (jsonMode) body.response_format = { type: 'json_object' };
+  if (maxTokens) body.max_tokens = maxTokens;
+  if (noThink) {
+    // 추론형 모델의 사고 단계를 끈다. 지원하지 않는 서버는 무시한다.
+    body.think = false;
+    body.reasoning_effort = 'none';
+  }
+  return body;
+}
+
+/** 어느 OpenAI 호환 서버든 같은 헤더를 받는다. */
+function chatHeaders(apiKey) {
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
+}
+
 async function chat(
   baseURL,
   apiKey,
@@ -50,20 +78,10 @@ async function chat(
   const ctl = timeoutMs ? new AbortController() : null;
   const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
   try {
-    const body = {
-      model: model || defaultModel,
-      messages: toOpenAIMessages(systemText, messages),
-    };
-    if (jsonMode) body.response_format = { type: 'json_object' };
-    if (maxTokens) body.max_tokens = maxTokens;
-    if (noThink) {
-      // 추론형 모델의 사고 단계를 끈다. 지원하지 않는 서버는 무시한다.
-      body.think = false;
-      body.reasoning_effort = 'none';
-    }
+    const body = buildChatBody({ model, defaultModel, systemText, messages, jsonMode, maxTokens, noThink });
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: chatHeaders(apiKey),
       body: JSON.stringify(body),
       signal: ctl ? ctl.signal : undefined,
     });
@@ -114,19 +132,10 @@ async function chatStream(
   const timer = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : null;
   let res;
   try {
-    const body = {
-      model: model || defaultModel,
-      messages: toOpenAIMessages(systemText, messages),
-      stream: true,
-    };
-    if (maxTokens) body.max_tokens = maxTokens;
-    if (noThink) {
-      body.think = false;
-      body.reasoning_effort = 'none';
-    }
+    const body = buildChatBody({ model, defaultModel, systemText, messages, maxTokens, noThink, stream: true });
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: chatHeaders(apiKey),
       body: JSON.stringify(body),
       signal: ctl.signal,
     });

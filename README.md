@@ -126,6 +126,22 @@ scripts/
   build-favicon.js favicon.svg → favicon.ico. 의존성 없이 zlib 만 쓴다(ICO 는 PNG 를 그대로 담는다)
 ```
 
+### AI 제공자를 하나 더 붙이려면
+
+네 곳을 고칩니다. 예전에는 화면 쪽이 세 곳이었는데, 목록을 한 벌로 모아 두 곳으로
+줄였습니다(`public/common.js` 의 `PROVIDER_OPTIONS`).
+
+| 무엇을 | 어디에 |
+|---|---|
+| 실제 호출 | `server/aiGM.js` 의 `PROVIDERS` — OpenAI 호환이면 `makeProvider({ baseURL, defaultModel })` 한 줄이면 됩니다 |
+| 화면 선택지 | `public/common.js` 의 `PROVIDER_OPTIONS` — ⚙ 설정과 🧠 모델 모달, 그리고 서버 목록이 오기 전 기본값이 여기서 함께 나옵니다 |
+| 문구 | `public/i18n.js` 의 `prov.<id>` (한국어·영어) |
+| 키 발급 안내 | `public/common.js` 의 `KEY_URLS` |
+
+서버의 `PROVIDER_NAMES` 는 `PROVIDERS` 의 키에서 나오고, 화면은 `/api/config` 로
+그 목록을 받아 자기 기본값을 덮어씁니다. 그래서 **서버에 없는 제공자를 화면에만
+넣으면 목록에서 조용히 사라집니다** — 반대도 마찬가지입니다.
+
 `favicon.ico` 는 생성물이지만 빌드 단계가 없어 저장소에 커밋한다. 모양을 바꿨으면
 `public/favicon.svg` 와 `scripts/build-favicon.js` 를 **함께** 고치고 다시 돌린 뒤 결과를 같이 커밋할 것.
 

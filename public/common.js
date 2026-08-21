@@ -15,12 +15,46 @@
  */
 (function () {
   const t = I18N.t;
+
+  /**
+   * AI 제공자 목록 — **여기 한 곳만 고치면 된다.**
+   *
+   * 예전에는 세 군데에 흩어져 있었다. ⚙ 설정 모달의 <select>, 🧠 모델 모달의
+   * <select>, 그리고 아래 App.providers 기본값. 제공자를 하나 늘리면 세 곳을
+   * 모두 고쳐야 했고, 빠뜨리면 한쪽 모달에서만 안 보였다.
+   *
+   * 라벨은 사전이 오기 전에 잠깐 보이는 원문이다(data-i18n 이 곧 덮어쓴다).
+   */
+  const PROVIDER_OPTIONS = [
+    ['gemini', 'Google Gemini (무료 등급 가능)'],
+    ['anthropic', 'Anthropic Claude'],
+    ['openai', 'OpenAI (GPT)'],
+    ['deepseek', 'DeepSeek (저렴)'],
+    ['xai', 'xAI Grok'],
+    ['qwen', 'Qwen (Alibaba)'],
+    ['custom', '커스텀 (Ollama / OpenAI 호환)'],
+  ];
+
+  /**
+   * 제공자 <option> 목록 HTML.
+   * '무료 체험'은 서버가 열어 줬을 때만 보이도록 id 로 따로 껐다 켜는데,
+   * 모달마다 그 id 가 달라서 인자로 받는다.
+   */
+  function providerOptionsHtml(freeOptionId) {
+    const rows = PROVIDER_OPTIONS.map(
+      ([id, label]) => `<option value="${id}" data-i18n="prov.${id}">${label}</option>`
+    ).join('\n          ');
+    return `${rows}
+          <option value="free" id="${freeOptionId}" hidden data-i18n="prov.free">무료 체험 (서버 AI · 키 불필요 · 느림)</option>`;
+  }
+
   const App = {
     user: null,
     settings: null, // {provider, model, baseURL, keys:{provider:true}}
     username: '',
     isAdmin: false,
-    providers: ['gemini', 'anthropic', 'openai', 'deepseek', 'xai', 'qwen', 'custom'],
+    // 서버가 /api/config 로 진짜 목록을 주기 전까지 쓰는 기본값(위 PROVIDER_OPTIONS 와 한 벌).
+    providers: PROVIDER_OPTIONS.map(([id]) => id),
     defaultModels: {},
     knownModels: {}, // 제공자별 추천 모델 후보(키 없이도 표시)
     freeAvailable: false, // 서버에 무료 체험(로컬 AI)이 열려 있는지
@@ -296,14 +330,7 @@
         </p>
         <label data-i18n="set.provider">AI 제공자</label>
         <select id="gmProvider">
-          <option value="gemini" data-i18n="prov.gemini">Google Gemini (무료 등급 가능)</option>
-          <option value="anthropic" data-i18n="prov.anthropic">Anthropic Claude</option>
-          <option value="openai" data-i18n="prov.openai">OpenAI (GPT)</option>
-          <option value="deepseek" data-i18n="prov.deepseek">DeepSeek (저렴)</option>
-          <option value="xai" data-i18n="prov.xai">xAI Grok</option>
-          <option value="qwen" data-i18n="prov.qwen">Qwen (Alibaba)</option>
-          <option value="custom" data-i18n="prov.custom">커스텀 (Ollama / OpenAI 호환)</option>
-          <option value="free" id="gmFreeOpt" hidden data-i18n="prov.free">무료 체험 (서버 AI · 키 불필요 · 느림)</option>
+          ${providerOptionsHtml('gmFreeOpt')}
         </select>
         <label><span data-i18n="set.model">모델</span> <span class="opt" data-i18n="set.modelOpt">(비우면 기본값 사용)</span></label>
         <input id="gmModel" type="text" data-i18n-ph="common.defaultValue" placeholder="기본값" autocomplete="off" list="gmModelList" />
@@ -345,14 +372,7 @@
 
         <label data-i18n="set.provider">AI 제공자</label>
         <select id="setProvider">
-          <option value="gemini" data-i18n="prov.gemini">Google Gemini (무료 등급 가능)</option>
-          <option value="anthropic" data-i18n="prov.anthropic">Anthropic Claude</option>
-          <option value="openai" data-i18n="prov.openai">OpenAI (GPT)</option>
-          <option value="deepseek" data-i18n="prov.deepseek">DeepSeek (저렴)</option>
-          <option value="xai" data-i18n="prov.xai">xAI Grok</option>
-          <option value="qwen" data-i18n="prov.qwen">Qwen (Alibaba)</option>
-          <option value="custom" data-i18n="prov.custom">커스텀 (Ollama / OpenAI 호환)</option>
-          <option value="free" id="setFreeOpt" hidden data-i18n="prov.free">무료 체험 (서버 AI · 키 불필요 · 느림)</option>
+          ${providerOptionsHtml('setFreeOpt')}
         </select>
 
         <div id="baseUrlRow" class="hidden">

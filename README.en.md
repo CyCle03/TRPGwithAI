@@ -156,6 +156,22 @@ scripts/
   build-favicon.js favicon.svg → favicon.ico, zlib only, no dependencies (ICO carries a PNG as-is)
 ```
 
+### Adding one more AI provider
+
+Four places. The screen side used to be three; the list is now kept in one spot
+(`PROVIDER_OPTIONS` in `public/common.js`), which brings it down to two.
+
+| What | Where |
+|---|---|
+| The actual call | `PROVIDERS` in `server/aiGM.js` — for anything OpenAI-compatible, one `makeProvider({ baseURL, defaultModel })` line |
+| The dropdown | `PROVIDER_OPTIONS` in `public/common.js` — the ⚙ settings modal, the 🧠 model modal and the pre-`/api/config` fallback all come from here |
+| Wording | `prov.<id>` in `public/i18n.js` (Korean and English) |
+| Where to get a key | `KEY_URLS` in `public/common.js` |
+
+`PROVIDER_NAMES` on the server comes from the keys of `PROVIDERS`, and the client
+overwrites its own fallback with whatever `/api/config` returns. So **a provider added
+only on the screen quietly disappears from the list** — and the other way round too.
+
 `favicon.ico` is generated but committed, because there is no build step. If you change the
 shape, edit `public/favicon.svg` **and** `scripts/build-favicon.js` together, re-run it, and
 commit the result alongside.
