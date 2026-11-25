@@ -354,7 +354,7 @@ function defaultAiFor(user) {
 }
 
 /** 사용자의 모든 슬롯을 로드(없으면 빈 슬롯 1개 생성). */
-function loadUserGames(userId, user) {
+function loadUserGames(userId, user, initialLang) {
   if (userGames.has(userId)) return userGames.get(userId);
   const dAi = defaultAiFor(user);
   const norm = store.normalize(store.loadRaw(userId), dAi);
@@ -365,7 +365,11 @@ function loadUserGames(userId, user) {
   let activeId = norm.activeId && slots[norm.activeId] ? norm.activeId : Object.keys(slots)[0] || null;
   if (!activeId) {
     const id = newId();
-    slots[id] = { id, ai: { ...dAi }, game: new GameSession(userId, null) };
+    slots[id] = {
+      id,
+      ai: { ...dAi },
+      game: new GameSession(userId, { lang: initialLang === 'en' ? 'en' : 'ko' }),
+    };
     activeId = id;
   }
   const ug = { activeId, slots };
@@ -592,10 +596,10 @@ io.on('connection', (socket) => {
   const userId = socket.userId;
   const user = auth.getUserById(userId);
   metrics.recordActive(userId); // 오늘 실제로 접속한 사용자
-  const ug = loadUserGames(userId, user);
   // 화면 언어. 접속할 때 query 로 받고, 사용자가 전환하면 setLang 으로 갱신된다.
   // 오류 메시지에만 쓴다 — AI 서사의 언어는 게임/대화마다 따로 고정된다.
   let uiLang = messages.langFromSocket(socket);
+  const ug = loadUserGames(userId, user, uiLang);
   socket.on('setLang', ({ lang } = {}) => {
     if (lang === 'ko' || lang === 'en') uiLang = lang;
   });
@@ -664,6 +668,9 @@ io.on('connection', (socket) => {
     const g = activeGame();
     if (!g) return emit('error', { message: '활성 게임이 없습니다.' });
     if (g.busy) return emit('error', { message: '처리 중입니다. 잠시 기다려주세요.' });
+    // 실제 모험이 시작되는 시점의 화면 언어를 고정한다. 이렇게 해야
+    // 예전 버전에서 만들어진 빈 슬롯도 영어로 시작할 수 있다.
+    if (!g.hasCharacter()) g.lang = uiLang === 'en' ? 'en' : 'ko';
     if (!ensureAi()) return;
     g.busy = true;
     try {

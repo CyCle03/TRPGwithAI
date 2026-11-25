@@ -7,7 +7,7 @@
  * response_format=json_object + 프롬프트에 JSON 형식을 명시하는 방식.
  */
 
-const GM_JSON_HINT = `반드시 아래 JSON 객체 하나로만 응답하라(설명·마크다운·코드블록 없이 순수 JSON):
+const GM_JSON_HINT_KO = `반드시 아래 JSON 객체 하나로만 응답하라(설명·마크다운·코드블록 없이 순수 JSON):
 {
   "narration": "플레이어에게 보여줄 서사(한국어)",
   "action": {
@@ -25,7 +25,43 @@ const GM_JSON_HINT = `반드시 아래 JSON 객체 하나로만 응답하라(설
   }
 }`;
 
-const SUGGEST_JSON_HINT = `반드시 아래 JSON 형식으로만 응답하라: {"suggestions": ["행동1", "행동2", "행동3"]}`;
+const GM_JSON_HINT_EN = `Respond with exactly one JSON object in the following shape (raw JSON only, with no explanation, Markdown or code fence):
+{
+  "narration": "Narration shown to the player (in English)",
+  "action": {
+    "type": "none",
+    "move": null,
+    "stat": null,
+    "reason": null,
+    "hpDelta": null,
+    "coinDelta": 0,
+    "addItems": [],
+    "removeItems": [],
+    "enemies": null,
+    "companions": null,
+    "xpGain": 0
+  }
+}
+Field requirements:
+- action.type is one of "roll", "update_state" or "none".
+- move, stat and reason are strings or null; stat is one of STR/DEX/CON/INT/WIS/CHA when present.
+- hpDelta is an integer or null. coinDelta and xpGain are integers.
+- addItems and removeItems are arrays of item-name strings.
+- enemies and companions are either null or arrays of {"name":"...","hp":"...","note":"..."}. Use null when the complete current list has not changed.
+All player-visible strings in narration, move, reason, items, enemies and companions must be in English, even if earlier conversation content is Korean.`;
+
+const SUGGEST_JSON_HINTS = {
+  ko: `반드시 아래 JSON 형식으로만 응답하라: {"suggestions": ["행동1", "행동2", "행동3"]}`,
+  en: `Respond only in this JSON shape: {"suggestions": ["action 1 in English", "action 2 in English", "action 3 in English"]}`,
+};
+
+function gmJsonHint(lang) {
+  return lang === 'en' ? GM_JSON_HINT_EN : GM_JSON_HINT_KO;
+}
+
+function suggestJsonHint(lang) {
+  return lang === 'en' ? SUGGEST_JSON_HINTS.en : SUGGEST_JSON_HINTS.ko;
+}
 
 function toOpenAIMessages(system, messages) {
   return [
@@ -243,12 +279,12 @@ function makeProvider({
   return {
     name,
     DEFAULT_MODEL: defaultModel,
-    async generate({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
-      const system = `${staticSystem}\n\n${dynamicSystem}\n\n${GM_JSON_HINT}`;
+    async generate({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages, lang }) {
+      const system = `${staticSystem}\n\n${dynamicSystem}\n\n${gmJsonHint(lang)}`;
       return chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, true, undefined, timeoutMs);
     },
-    async generateSuggestions({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages }) {
-      const system = `${staticSystem}\n\n${dynamicSystem}\n\n${SUGGEST_JSON_HINT}`;
+    async generateSuggestions({ apiKey, model, baseURL: cbu, staticSystem, dynamicSystem, messages, lang }) {
+      const system = `${staticSystem}\n\n${dynamicSystem}\n\n${suggestJsonHint(lang)}`;
       const text = await chat(resolveBase(cbu), resolveKey(apiKey), model, defaultModel, system, messages, true, undefined, timeoutMs);
       try {
         const obj = JSON.parse(text);

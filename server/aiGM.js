@@ -311,6 +311,7 @@ async function callGM(session, messages) {
     staticSystem: staticSystemFor(lang),
     dynamicSystem: buildStateSummary(session, lang),
     messages,
+    lang,
   });
 
   let parsed;
@@ -356,6 +357,7 @@ async function suggestGmActions(session, messages) {
     staticSystem: lang === 'en' ? SUGGEST_SYSTEM_EN : SUGGEST_SYSTEM_KO,
     dynamicSystem: buildStateSummary(session, lang),
     messages: msgs,
+    lang,
   });
   let arr;
   try {
